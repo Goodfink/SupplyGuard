@@ -1,6 +1,6 @@
 import re
 
-from src.llm.prompt_template import create_rag_prompt
+from supplyguard.llm.prompt_template import create_rag_prompt
 
 class RAGPipeline:
     def __init__(self, bm25_retriever, dense_retriever, llm=None, bm25_min_score=10.0, dense_min_score=0.44, max_contexts=3):
@@ -8,7 +8,7 @@ class RAGPipeline:
         self.bm25_retriever = bm25_retriever
         self.dense_retriever = dense_retriever
         if llm is None:
-            from src.llm.llm_setup import HuggingFaceLLM
+            from supplyguard.llm.llm_setup import HuggingFaceLLM
 
             llm = HuggingFaceLLM()
         self.llm = llm

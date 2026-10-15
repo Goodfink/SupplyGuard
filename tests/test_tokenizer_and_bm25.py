@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from src.retrieval.bm25 import BM25Retriever, load_corpus
-from src.retrieval.tokenizer import tokenize
+from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
+from supplyguard.retrieval.tokenizer import tokenize
 
 
 def test_tokenize_preserves_security_and_package_identifiers():

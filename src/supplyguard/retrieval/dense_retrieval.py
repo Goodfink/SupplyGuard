@@ -1,4 +1,4 @@
-from src.reproducibility import DEVICE
+from supplyguard.reproducibility import DEVICE
 import json
 import numpy as np
 from sentence_transformers import SentenceTransformer
