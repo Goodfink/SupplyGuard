@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from supplyguard.errors import ConfigurationError, CorpusError, RetrievalIndexError
 from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
 from supplyguard.retrieval.tokenizer import tokenize
 
@@ -42,17 +43,17 @@ def test_bm25_ranks_exact_package_match_first(advisory_record_factory):
 
 
 def test_bm25_rejects_search_before_index_is_built():
-    with pytest.raises(ValueError, match="Build the BM25 index"):
+    with pytest.raises(RetrievalIndexError, match="Build the BM25 index"):
         BM25Retriever().search("query")
 
 
 def test_bm25_rejects_invalid_index_and_search_arguments(advisory_record_factory):
     retriever = BM25Retriever()
-    with pytest.raises(ValueError, match="No records"):
+    with pytest.raises(RetrievalIndexError, match="empty corpus"):
         retriever.build_index([])
 
     retriever.build_index([advisory_record_factory()])
-    with pytest.raises(ValueError, match="top_k"):
+    with pytest.raises(ConfigurationError, match="top_k"):
         retriever.search("query", top_k=0)
     assert retriever.search("---") == []
 
@@ -69,7 +70,7 @@ def test_load_corpus_reports_invalid_json_line(tmp_path):
     corpus_path = tmp_path / "advisories.jsonl"
     corpus_path.write_text('{"retrieval_text": "valid"}\nnot-json\n', encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Invalid JSON on line 2"):
+    with pytest.raises(CorpusError, match="line 2"):
         load_corpus(corpus_path)
 
 
@@ -77,5 +78,15 @@ def test_load_corpus_requires_retrieval_text(tmp_path):
     corpus_path = tmp_path / "advisories.jsonl"
     corpus_path.write_text('{"document_id": "GHSA-missing"}\n', encoding="utf-8")
 
-    with pytest.raises(ValueError, match="missing retrieval_text"):
+    with pytest.raises(CorpusError, match="missing retrieval_text"):
         load_corpus(corpus_path)
+
+
+def test_load_corpus_reports_missing_and_empty_files(tmp_path):
+    with pytest.raises(CorpusError, match="Could not read advisory corpus"):
+        load_corpus(tmp_path / "missing.jsonl")
+
+    empty_path = tmp_path / "empty.jsonl"
+    empty_path.write_text("\n", encoding="utf-8")
+    with pytest.raises(CorpusError, match="corpus is empty"):
+        load_corpus(empty_path)

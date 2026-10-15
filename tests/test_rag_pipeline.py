@@ -1,3 +1,7 @@
+import pytest
+
+from supplyguard.config import DEFAULT_CONFIG, RetrievalConfig, SupplyGuardConfig
+from supplyguard.errors import ModelGenerationError
 from supplyguard.llm.answer_generation import RAGPipeline
 
 
@@ -46,6 +50,7 @@ def test_generate_answer_uses_filtered_bm25_context(advisory_record_factory):
     assert result["retrieval_method"] == "bm25"
     assert result["num_chunks"] == 1
     assert record["retrieval_text"] in llm.calls[0][0]
+    assert llm.calls[0][1] == {"max_tokens": DEFAULT_CONFIG.models.answer_max_tokens}
     assert bm25.queries == [("What affects example-package?", 5)]
 
 
@@ -91,7 +96,13 @@ def test_filter_retrieved_applies_relative_cutoff_and_context_limit(
         )
     ]
     retriever = FakeRetriever(results)
-    pipeline = RAGPipeline(retriever, retriever, llm=FakeLLM(), max_contexts=2)
+    config = SupplyGuardConfig(
+        paths=DEFAULT_CONFIG.paths,
+        models=DEFAULT_CONFIG.models,
+        retrieval=RetrievalConfig(max_contexts=2),
+        runtime=DEFAULT_CONFIG.runtime,
+    )
+    pipeline = RAGPipeline(retriever, retriever, llm=FakeLLM(), config=config)
 
     filtered = pipeline.filter_retrieved("general question", results, use_dense=False)
 
@@ -110,3 +121,28 @@ def test_extract_citations_deduplicates_supported_identifier_types():
         "CVE-2025-1234",
         "GO-2025-1000",
     }
+
+
+def test_empty_retrieval_abstains_without_calling_llm():
+    retriever = FakeRetriever([])
+    llm = FakeLLM()
+    pipeline = RAGPipeline(retriever, retriever, llm=llm)
+
+    result = pipeline.generate_answer("What affects missing-package?", use_dense=False)
+
+    assert result["answer"] == "I don't know"
+    assert result["retrieved_chunks"] == []
+    assert llm.calls == []
+
+
+def test_generation_errors_are_not_converted_to_empty_answers(advisory_record_factory):
+    class FailingLLM:
+        def generate(self, prompt, **settings):
+            raise ModelGenerationError("generation failed")
+
+    record = advisory_record_factory()
+    retriever = FakeRetriever([retrieval_result(record, score=20.0)])
+    pipeline = RAGPipeline(retriever, retriever, llm=FailingLLM())
+
+    with pytest.raises(ModelGenerationError, match="generation failed"):
+        pipeline.generate_answer("What affects example-package?", use_dense=False)

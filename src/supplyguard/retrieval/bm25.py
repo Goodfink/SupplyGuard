@@ -5,7 +5,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from supplyguard.paths import DEFAULT_CORPUS_PATH
+from supplyguard.config import DEFAULT_CONFIG
+from supplyguard.errors import ConfigurationError, CorpusError, RetrievalIndexError
 
 from .tokenizer import tokenize
 
@@ -16,24 +17,35 @@ type SearchResult = dict[str, Any]
 def load_corpus(corpus_path: Path) -> list[AdvisoryRecord]:
     records: list[AdvisoryRecord] = []
 
-    with corpus_path.open("r", encoding="utf-8") as f:
-        for line_number, line in enumerate(f, start=1):
-            line = line.strip()
+    try:
+        with corpus_path.open("r", encoding="utf-8") as file:
+            for line_number, line in enumerate(file, start=1):
+                line = line.strip()
 
-            if not line:
-                continue
+                if not line:
+                    continue
 
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError as error:
-                raise ValueError(f"Invalid JSON on line {line_number}: {error}") from error
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise CorpusError(
+                        f"Invalid JSON in corpus '{corpus_path}' on line {line_number}: {error.msg}"
+                    ) from error
 
-            if not record.get("retrieval_text"):
-                raise ValueError(f"Record on line {line_number} is missing retrieval_text")
+                if not record.get("retrieval_text"):
+                    raise CorpusError(
+                        f"Corpus record on line {line_number} is missing retrieval_text"
+                    )
 
-            records.append(record)
+                records.append(record)
+    except OSError as error:
+        raise CorpusError(
+            f"Could not read advisory corpus '{corpus_path}': {error.strerror}"
+        ) from error
 
-        return records
+    if not records:
+        raise CorpusError(f"Advisory corpus is empty: {corpus_path}")
+    return records
 
 
 class BM25Retriever:
@@ -51,7 +63,7 @@ class BM25Retriever:
 
     def build_index(self, records: list[AdvisoryRecord]) -> None:
         if not records:
-            raise ValueError("No records found")
+            raise RetrievalIndexError("Cannot build the BM25 index from an empty corpus")
 
         self.records = records
         self.document_lengths = []
@@ -78,12 +90,16 @@ class BM25Retriever:
                 1 + (number_of_documents - document_frequency + 0.5) / (document_frequency + 0.5)
             )
 
-    def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
+    def search(
+        self,
+        query: str,
+        top_k: int = DEFAULT_CONFIG.retrieval.top_k,
+    ) -> list[SearchResult]:
         if not self.records:
-            raise ValueError("Build the BM25 index before searching")
+            raise RetrievalIndexError("Build the BM25 index before searching")
 
         if top_k <= 0:
-            raise ValueError("top_k must be greater than 0")
+            raise ConfigurationError("top_k must be greater than 0")
 
         query_tokens = tokenize(query)
 
@@ -155,10 +171,16 @@ def main() -> None:
 
     parser.add_argument("--query", required=True, help="Question or search query")
     parser.add_argument(
-        "--top_k", required=True, type=int, default=5, help="Number of results to return"
+        "--top_k",
+        type=int,
+        default=DEFAULT_CONFIG.retrieval.top_k,
+        help="Number of results to return",
     )
     parser.add_argument(
-        "--corpus", type=Path, default=DEFAULT_CORPUS_PATH, help="Path to the advisories.jsonl"
+        "--corpus",
+        type=Path,
+        default=DEFAULT_CONFIG.paths.corpus_path,
+        help="Path to the advisories.jsonl",
     )
     args = parser.parse_args()
 
