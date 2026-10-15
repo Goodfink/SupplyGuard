@@ -1,4 +1,4 @@
-from src.reproducibility import DEVICE
+from supplyguard.reproducibility import DEVICE
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 

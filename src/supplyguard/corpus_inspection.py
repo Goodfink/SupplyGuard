@@ -1,12 +1,18 @@
 import json
 import zipfile
-from pathlib import Path
-from obj.CorpusStats import CorpusStats
-from helpers.data_helpers import is_ghsa_advisory, is_malicious_advisory, is_withdrawn_advisory, is_in_date_range, has_affected_package, has_description, is_valid_advisory
 from datetime import datetime
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
+from supplyguard.corpus_stats import CorpusStats
+from supplyguard.helpers.data_helpers import (
+    has_affected_package,
+    has_description,
+    is_ghsa_advisory,
+    is_in_date_range,
+    is_malicious_advisory,
+    is_valid_advisory,
+    is_withdrawn_advisory,
+)
+from supplyguard.paths import RAW_DATA_DIR
 
 START_DATE = datetime.fromisoformat("2022-01-01T00:00:00+00:00")
 CUTOFF_DATE = datetime.fromisoformat("2026-07-21T23:59:59+00:00")
@@ -70,4 +76,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

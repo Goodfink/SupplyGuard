@@ -1,15 +1,12 @@
 import json
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-EVALUATION_FILE = PROJECT_ROOT / "src" / "evaluation" / "evaluation_set.json"
-OUTPUT_FILE = PROJECT_ROOT / "evaluation_results.json"
+from supplyguard.paths import DEFAULT_RESULTS_FILE, EVALUATION_FILE
 
 
 def main():
     """Run the no-retrieval factoid baseline."""
-    from src.evaluation.evaluation_metrics import EvaluationMetrics
-    from src.llm.llm_setup import HuggingFaceLLM
+    from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
+    from supplyguard.llm.llm_setup import HuggingFaceLLM
 
     with EVALUATION_FILE.open(encoding="utf-8") as file:
         evaluation_set = json.load(file)
@@ -20,8 +17,8 @@ def main():
     llm = HuggingFaceLLM()
     metrics = EvaluationMetrics()
 
-    if OUTPUT_FILE.exists():
-        with OUTPUT_FILE.open(encoding="utf-8") as file:
+    if DEFAULT_RESULTS_FILE.exists():
+        with DEFAULT_RESULTS_FILE.open(encoding="utf-8") as file:
             saved_results = {
                 item["question_id"]: item for item in json.load(file)
             }
@@ -79,7 +76,7 @@ Answer:"""
         for item in evaluation_set
         if item["question_id"] in saved_results
     ]
-    with OUTPUT_FILE.open("w", encoding="utf-8") as file:
+    with DEFAULT_RESULTS_FILE.open("w", encoding="utf-8") as file:
         json.dump(results, file, indent=2)
 
     automatic_correct = sum(
@@ -90,7 +87,7 @@ Answer:"""
         f"Automatic accuracy: {automatic_correct}/{len(diagnostic_items)} "
         f"({automatic_correct / len(diagnostic_items):.1%})"
     )
-    print(f"Results saved to: {OUTPUT_FILE}")
+    print(f"Results saved to: {DEFAULT_RESULTS_FILE}")
 
 
 if __name__ == "__main__":

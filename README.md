@@ -15,12 +15,12 @@ The tracked corpus is stored in `data/processed/advisories.jsonl`. The evaluatio
 
 ## Setup
 
-Use Python 3.13.5 and run commands from the repository root.
+Use Python 3.13.5.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 The first run downloads the pinned Qwen and MiniLM model revisions from Hugging Face. Later runs use the local model cache.
@@ -38,7 +38,7 @@ python -m pytest
 Run all no-retrieval, BM25, and dense experiments with one command:
 
 ```bash
-python -u src/run_experiments.py
+supplyguard-experiments
 ```
 
 Results are written to `evaluation_results.json`. Random seeds, dependency versions, model revisions, CPU execution, and deterministic generation are fixed for reproducibility.
@@ -48,13 +48,13 @@ Results are written to `evaluation_results.json`. Random seeds, dependency versi
 Ask one question using both retrievers:
 
 ```bash
-python -m src.rag_cli --query "Which version fixes the vulnerability in github.com/dhowden/tag?"
+supplyguard ask "Which version fixes the vulnerability in github.com/dhowden/tag?"
 ```
 
 Run the interactive dense-retrieval demo:
 
 ```bash
-python -m src.rag_cli --demo
+supplyguard demo
 ```
 
 ## Results

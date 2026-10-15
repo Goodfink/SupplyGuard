@@ -3,10 +3,10 @@ import json
 import math
 from collections import defaultdict, Counter
 from pathlib import Path
-from .tokenizer import tokenize
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DEFAULT_CORPUS_PATH = PROJECT_ROOT / "data" / "processed" / "advisories.jsonl"
+from supplyguard.paths import DEFAULT_CORPUS_PATH
+
+from .tokenizer import tokenize
 
 def load_corpus(corpus_path):
     records = []
@@ -154,7 +154,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

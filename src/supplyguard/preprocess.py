@@ -3,13 +3,8 @@ import random
 import zipfile
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
-
-from src.helpers.data_helpers import is_valid_advisory, get_published_date
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
+from supplyguard.helpers.data_helpers import get_published_date, is_valid_advisory
+from supplyguard.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR
 
 START_DATE = datetime.fromisoformat("2022-01-01T00:00:00+00:00")
 CUTOFF_DATE = datetime.fromisoformat("2026-07-21T23:59:59+00:00")
@@ -311,7 +306,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

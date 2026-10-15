@@ -1,19 +1,18 @@
 import subprocess
 import sys
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from supplyguard.paths import PROJECT_ROOT
 
 
 def main():
     """Run the no-retrieval baseline and both RAG evaluations."""
     subprocess.run(
-        [sys.executable, "-u", "-m", "src.run_baseline"],
+        [sys.executable, "-u", "-m", "supplyguard.run_baseline"],
         cwd=PROJECT_ROOT,
         check=True,
     )
     subprocess.run(
-        [sys.executable, "-u", "-m", "src.rag_cli", "--evaluate", "all"],
+        [sys.executable, "-u", "-m", "supplyguard.cli", "evaluate"],
         cwd=PROJECT_ROOT,
         check=True,
     )

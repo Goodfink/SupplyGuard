@@ -1,4 +1,4 @@
-from src.llm.answer_generation import RAGPipeline
+from supplyguard.llm.answer_generation import RAGPipeline
 
 
 class FakeRetriever:

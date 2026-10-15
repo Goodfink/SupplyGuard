@@ -1,6 +1,6 @@
 import pytest
 
-from src.evaluation.evaluation_metrics import EvaluationMetrics
+from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
 
 
 def test_factoid_requires_all_facts_and_no_forbidden_terms():

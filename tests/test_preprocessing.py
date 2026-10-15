@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from src.helpers.data_helpers import is_valid_advisory
-from src.preprocess import build_retrieval_text, normalize_advisory
+from supplyguard.helpers.data_helpers import is_valid_advisory
+from supplyguard.preprocess import build_retrieval_text, normalize_advisory
 
 
 START_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
