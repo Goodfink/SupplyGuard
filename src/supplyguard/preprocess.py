@@ -3,6 +3,7 @@ import random
 import zipfile
 from collections import defaultdict
 from datetime import datetime
+
 from supplyguard.helpers.data_helpers import get_published_date, is_valid_advisory
 from supplyguard.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR
 
@@ -20,6 +21,7 @@ ZIP_FILES = {
     "PyPI": RAW_DATA_DIR / "pypi.zip",
 }
 
+
 def collect_candidates(ecosystem, zip_path):
     candidates_by_year = defaultdict(list)
     seen_ids = set()
@@ -29,7 +31,6 @@ def collect_candidates(ecosystem, zip_path):
 
     with zipfile.ZipFile(zip_path) as archive:
         for filename in archive.namelist():
-
             if filename.endswith("/") or not filename.lower().endswith(".json"):
                 continue
 
@@ -55,9 +56,17 @@ def collect_candidates(ecosystem, zip_path):
 
             seen_ids.add(advisory_id)
 
-            candidates_by_year[published_date.year].append({"record": record, "source_ecosystem": ecosystem, "source_filename": filename, "published_year": published_date.year})
+            candidates_by_year[published_date.year].append(
+                {
+                    "record": record,
+                    "source_ecosystem": ecosystem,
+                    "source_filename": filename,
+                    "published_year": published_date.year,
+                }
+            )
 
     return candidates_by_year
+
 
 def select_candidates(ecosystem, candidates_by_year):
 
@@ -65,7 +74,7 @@ def select_candidates(ecosystem, candidates_by_year):
 
     for year in YEARS:
         candidates = candidates_by_year.get(year, [])
-        candidates.sort(key = lambda item: item["record"].get("id", ""))
+        candidates.sort(key=lambda item: item["record"].get("id", ""))
 
         if len(candidates) < SAMPLES_PER_YEAR:
             raise ValueError(f"{ecosystem} only has {len(candidates)} candidates for year {year}")
@@ -75,6 +84,7 @@ def select_candidates(ecosystem, candidates_by_year):
         selected.extend(year_selection)
 
     return selected
+
 
 def extract_packages(record):
     packages = []
@@ -90,11 +100,7 @@ def extract_packages(record):
         if not name:
             continue
 
-        package_key = (
-            ecosystem or "",
-            name,
-            purl or ""
-        )
+        package_key = (ecosystem or "", name, purl or "")
 
         if package_key in seen_packages:
             continue
@@ -104,6 +110,7 @@ def extract_packages(record):
 
     return packages
 
+
 def extract_affected_ranges(record):
     affected_ranges = []
 
@@ -112,12 +119,17 @@ def extract_affected_ranges(record):
         package_name = package.get("name")
 
         for range_item in affected_item.get("ranges", []):
-            affected_ranges.append({"package": package_name,
-                                    "type": range_item.get("type"),
-                                    "repository": range_item.get("repo"),
-                                    "events": range_item.get("events", [])})
+            affected_ranges.append(
+                {
+                    "package": package_name,
+                    "type": range_item.get("type"),
+                    "repository": range_item.get("repo"),
+                    "events": range_item.get("events", []),
+                }
+            )
 
     return affected_ranges
+
 
 def extract_fix_version(record):
     fix_versions = []
@@ -134,19 +146,16 @@ def extract_fix_version(record):
                 if not fixed_version:
                     continue
 
-                version_key = (
-                    package_name,
-                    fixed_version
-                )
+                version_key = (package_name, fixed_version)
 
                 if version_key in seen_version:
                     continue
 
                 seen_version.add(version_key)
-                fix_versions.append({"package": package_name,
-                                     "version": fixed_version})
+                fix_versions.append({"package": package_name, "version": fixed_version})
 
     return fix_versions
+
 
 def extract_affected_versions(record):
     affected_versions = []
@@ -162,6 +171,7 @@ def extract_affected_versions(record):
 
     return affected_versions
 
+
 def extract_references(record):
     references = []
 
@@ -176,12 +186,14 @@ def extract_references(record):
     return references
 
 
-def build_retrieval_text(advisory_id, aliases, packages, summary, details, affected_ranges, fixed_versions):
+def build_retrieval_text(
+    advisory_id, aliases, packages, summary, details, affected_ranges, fixed_versions
+):
 
     sections = [f"Advisory ID: {advisory_id}"]
 
     if aliases:
-        sections.append(f"Aliases: " + ", ".join(aliases))
+        sections.append("Aliases: " + ", ".join(aliases))
 
     if packages:
         package_names = [package["name"] for package in packages]
@@ -195,8 +207,8 @@ def build_retrieval_text(advisory_id, aliases, packages, summary, details, affec
         sections.append(f"Details: {details}")
 
     if fixed_versions:
-        fixes_text = [f"{item["package"]} fixed in {item["version"]}" for item in fixed_versions]
-        sections.append(f"Fixed versions: " + ", ".join(fixes_text))
+        fixes_text = [f"{item['package']} fixed in {item['version']}" for item in fixed_versions]
+        sections.append("Fixed versions: " + ", ".join(fixes_text))
 
     for affected_range in affected_ranges:
         event_text = []
@@ -206,9 +218,13 @@ def build_retrieval_text(advisory_id, aliases, packages, summary, details, affec
                 event_text.append(f"{event_type} {version}")
 
         if event_text:
-            sections.append(f"Affected range for {affected_range.get('package')} ({affected_range.get("type")}):" + ", ".join(event_text))
+            sections.append(
+                f"Affected range for {affected_range.get('package')} ({affected_range.get('type')}):"
+                + ", ".join(event_text)
+            )
 
     return "\n".join(sections)
+
 
 def normalize_advisory(candidate):
     record = candidate["record"]
@@ -225,13 +241,13 @@ def normalize_advisory(candidate):
     references = extract_references(record)
 
     retrieval_text = build_retrieval_text(
-        advisory_id = advisory_id,
-        aliases = aliases,
-        packages = packages,
-        summary = summary,
-        details = details,
-        affected_ranges = affected_ranges,
-        fixed_versions = fixed_versions
+        advisory_id=advisory_id,
+        aliases=aliases,
+        packages=packages,
+        summary=summary,
+        details=details,
+        affected_ranges=affected_ranges,
+        fixed_versions=fixed_versions,
     )
 
     return {
@@ -256,12 +272,14 @@ def normalize_advisory(candidate):
         "retrieval_text": retrieval_text,
     }
 
+
 def write_jsonl(records, output_path):
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with output_path.open("w", encoding = "utf-8") as f:
+    with output_path.open("w", encoding="utf-8") as f:
         for record in records:
-            f.write(json.dumps(record, ensure_ascii = False) + "\n")
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
 
 def write_manifest(records, output_path):
     manifest = {
@@ -281,8 +299,9 @@ def write_manifest(records, output_path):
         ],
     }
 
-    with output_path.open("w", encoding = "utf-8") as f:
-        json.dump(manifest, f, indent = 2, ensure_ascii = False)
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
 
 def main():
     selected_candidates = []
@@ -293,7 +312,13 @@ def main():
         selected_candidates.extend(ecosystem_selection)
 
     processed_records = [normalize_advisory(candidate) for candidate in selected_candidates]
-    processed_records.sort(key = lambda record: (record["source_ecosystem"], record["published_year"], record["document_id"]))
+    processed_records.sort(
+        key=lambda record: (
+            record["source_ecosystem"],
+            record["published_year"],
+            record["document_id"],
+        )
+    )
 
     corpus_path = PROCESSED_DATA_DIR / "advisories.jsonl"
     manifest_path = PROCESSED_DATA_DIR / "corpus_manifest.jsonl"
@@ -304,8 +329,6 @@ def main():
     print(f"Saved {len(processed_records):} processed advisories")
     print(f"Manifest {manifest_path}")
 
+
 if __name__ == "__main__":
     main()
-
-
-

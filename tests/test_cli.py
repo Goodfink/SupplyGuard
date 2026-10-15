@@ -21,9 +21,7 @@ def test_parser_exposes_expected_commands(arguments, command):
 
 
 def test_ask_accepts_custom_corpus_path():
-    args = build_parser().parse_args(
-        ["ask", "question", "--corpus", "custom.jsonl"]
-    )
+    args = build_parser().parse_args(["ask", "question", "--corpus", "custom.jsonl"])
 
     assert args.corpus == Path("custom.jsonl")
 
@@ -46,9 +44,7 @@ def test_main_routes_ask_command(monkeypatch):
     monkeypatch.setattr(
         cli,
         "run_single_query",
-        lambda question, bm25, dense, llm: received.append(
-            (question, bm25, dense, llm)
-        ),
+        lambda question, bm25, dense, llm: received.append((question, bm25, dense, llm)),
     )
 
     assert main(["ask", "Which version is fixed?"]) == 0

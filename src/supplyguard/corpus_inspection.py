@@ -24,13 +24,13 @@ ZIP_FILES = {
     "PyPI": RAW_DATA_DIR / "pypi.zip",
 }
 
+
 def inspect_zip(ecosystem, zip_path):
 
     stats = CorpusStats()
 
     with zipfile.ZipFile(zip_path, "r") as archive:
         for filename in archive.namelist():
-
             if filename.endswith("/") or not filename.lower().endswith(".json"):
                 continue
 
@@ -73,6 +73,7 @@ def inspect_zip(ecosystem, zip_path):
 def main():
     for ecosystem, zip_path in ZIP_FILES.items():
         inspect_zip(ecosystem, zip_path)
+
 
 if __name__ == "__main__":
     main()

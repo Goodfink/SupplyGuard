@@ -10,9 +10,7 @@ def advisory_record_factory():
         retrieval_text=None,
     ):
         text = retrieval_text or (
-            f"Advisory ID: {document_id}\n"
-            f"Affected packages: {package_name}\n"
-            f"Summary: {summary}"
+            f"Advisory ID: {document_id}\nAffected packages: {package_name}\nSummary: {summary}"
         )
         return {
             "document_id": document_id,

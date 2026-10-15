@@ -115,22 +115,15 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_RESULTS_FILE):
     metrics = EvaluationMetrics()
     if results_file.exists():
         with results_file.open(encoding="utf-8") as file:
-            saved_results = {
-                item["question_id"]: item for item in json.load(file)
-            }
+            saved_results = {item["question_id"]: item for item in json.load(file)}
     else:
         saved_results = {}
 
     bm25_results = []
     dense_results = []
     for index, question_item in enumerate(evaluation_set, 1):
-        print(
-            f"\n[{index}/{len(evaluation_set)}] "
-            f"{question_item['question'][:60]}..."
-        )
-        result = generate_with_both_retrievers(
-            question_item["question"], bm25, dense, llm
-        )
+        print(f"\n[{index}/{len(evaluation_set)}] {question_item['question'][:60]}...")
+        result = generate_with_both_retrievers(question_item["question"], bm25, dense, llm)
 
         bm25_eval = metrics.evaluate_answer(
             result["bm25"]["answer"],
@@ -162,8 +155,7 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_RESULTS_FILE):
                     "correct": bm25_eval["correct"],
                     "citations_accurate": bm25_eval["citations_accurate"],
                     "retrieved_document_ids": [
-                        item["document_id"]
-                        for item in result["bm25"]["retrieved_chunks"]
+                        item["document_id"] for item in result["bm25"]["retrieved_chunks"]
                     ],
                 },
                 "dense": {
@@ -171,8 +163,7 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_RESULTS_FILE):
                     "correct": dense_eval["correct"],
                     "citations_accurate": dense_eval["citations_accurate"],
                     "retrieved_document_ids": [
-                        item["document_id"]
-                        for item in result["dense"]["retrieved_chunks"]
+                        item["document_id"] for item in result["dense"]["retrieved_chunks"]
                     ],
                 },
             }
@@ -183,9 +174,7 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_RESULTS_FILE):
         dense_status = "✓" if dense_eval["correct"] else "✗"
         print(f"  BM25: {bm25_status} | Dense: {dense_status}")
 
-    ordered_results = [
-        saved_results[item["question_id"]] for item in evaluation_set
-    ]
+    ordered_results = [saved_results[item["question_id"]] for item in evaluation_set]
     with results_file.open("w", encoding="utf-8") as file:
         json.dump(ordered_results, file, indent=2)
 
@@ -255,9 +244,7 @@ def build_parser():
         help="Where to write evaluation results",
     )
 
-    demo_parser = subparsers.add_parser(
-        "demo", help="Start the interactive dense-retrieval demo."
-    )
+    demo_parser = subparsers.add_parser("demo", help="Start the interactive dense-retrieval demo.")
     demo_parser.add_argument(
         "--corpus",
         type=Path,
@@ -265,9 +252,7 @@ def build_parser():
         help="Path to an advisory JSONL corpus",
     )
 
-    subparsers.add_parser(
-        "inspect-corpus", help="Inspect the configured raw OSV archives."
-    )
+    subparsers.add_parser("inspect-corpus", help="Inspect the configured raw OSV archives.")
     return parser
 
 
@@ -291,9 +276,7 @@ def main(argv=None):
     if args.command == "ask":
         run_single_query(args.question, bm25, dense, llm)
     elif args.command == "evaluate":
-        run_full_evaluation(
-            bm25, dense, llm, results_file=args.results_file
-        )
+        run_full_evaluation(bm25, dense, llm, results_file=args.results_file)
     elif args.command == "demo":
         interactive_demo(bm25, dense, llm)
     return 0

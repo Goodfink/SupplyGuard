@@ -8,9 +8,7 @@ def get_published_date(record):
         return None
 
     try:
-        return datetime.fromisoformat(
-            date_string.replace("Z", "+00:00")
-        )
+        return datetime.fromisoformat(date_string.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return None
 
@@ -32,10 +30,7 @@ def is_withdrawn_advisory(record):
 def is_in_date_range(record, start_date, cutoff_date):
     published_date = get_published_date(record)
 
-    return (
-        published_date is not None
-        and start_date <= published_date <= cutoff_date
-    )
+    return published_date is not None and start_date <= published_date <= cutoff_date
 
 
 def has_affected_package(record):
@@ -52,10 +47,7 @@ def has_description(record):
     summary = record.get("summary") or ""
     details = record.get("details") or ""
 
-    return bool(
-        summary.strip()
-        or details.strip()
-    )
+    return bool(summary.strip() or details.strip())
 
 
 def is_valid_advisory(record, start_date, cutoff_date):
