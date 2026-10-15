@@ -1,5 +1,6 @@
 import re
 
+from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
 from supplyguard.llm.prompt_template import create_rag_prompt
 
 
@@ -9,21 +10,17 @@ class RAGPipeline:
         bm25_retriever,
         dense_retriever,
         llm=None,
-        bm25_min_score=10.0,
-        dense_min_score=0.44,
-        max_contexts=3,
+        config: SupplyGuardConfig = DEFAULT_CONFIG,
     ):
         """Initialize RAG pipeline"""
+        self.config = config
         self.bm25_retriever = bm25_retriever
         self.dense_retriever = dense_retriever
         if llm is None:
             from supplyguard.llm.llm_setup import HuggingFaceLLM
 
-            llm = HuggingFaceLLM()
+            llm = HuggingFaceLLM(config.models)
         self.llm = llm
-        self.bm25_min_score = bm25_min_score
-        self.dense_min_score = dense_min_score
-        self.max_contexts = max_contexts
 
     def filter_retrieved(self, question, retrieved, use_dense):
         if not retrieved:
@@ -49,18 +46,26 @@ class RAGPipeline:
             if package_name not in package_names:
                 return []
 
-        minimum_score = self.dense_min_score if use_dense else self.bm25_min_score
-        relative_cutoff = 0.70 if use_dense else 0.65
+        retrieval_config = self.config.retrieval
+        minimum_score = (
+            retrieval_config.dense_min_score if use_dense else retrieval_config.bm25_min_score
+        )
+        relative_cutoff = (
+            retrieval_config.dense_relative_cutoff
+            if use_dense
+            else retrieval_config.bm25_relative_cutoff
+        )
         top_score = retrieved[0]["score"]
         score_cutoff = max(minimum_score, top_score * relative_cutoff)
         return [result for result in retrieved if result["score"] >= score_cutoff][
-            : self.max_contexts
+            : retrieval_config.max_contexts
         ]
 
-    def generate_answer(self, question, use_dense=True, top_k=5):
+    def generate_answer(self, question, use_dense=True, top_k=None):
         """Generate answer using retrieved context"""
+        if top_k is None:
+            top_k = self.config.retrieval.top_k
 
-        # Retrieve context
         if use_dense:
             retrieved = self.dense_retriever.search(question, top_k=top_k)
             retrieval_method = "dense"
@@ -70,12 +75,11 @@ class RAGPipeline:
 
         retrieved = self.filter_retrieved(question, retrieved, use_dense)
 
-        # Get full records for context
         retrieved_chunks = [r["record"] for r in retrieved]
 
         if retrieved_chunks:
             prompt = create_rag_prompt(question, retrieved_chunks)
-            answer = self.llm.generate(prompt, temperature=0.3, max_tokens=300)
+            answer = self.llm.generate(prompt, max_tokens=self.config.models.answer_max_tokens)
         else:
             answer = "I don't know"
 
@@ -99,7 +103,7 @@ def generate_with_both_retrievers(question, bm25_retriever, dense_retriever, llm
 
     pipeline = RAGPipeline(bm25_retriever, dense_retriever, llm)
 
-    bm25_result = pipeline.generate_answer(question, use_dense=False, top_k=5)
-    dense_result = pipeline.generate_answer(question, use_dense=True, top_k=5)
+    bm25_result = pipeline.generate_answer(question, use_dense=False)
+    dense_result = pipeline.generate_answer(question, use_dense=True)
 
     return {"question": question, "bm25": bm25_result, "dense": dense_result}

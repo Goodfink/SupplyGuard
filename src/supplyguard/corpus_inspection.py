@@ -2,7 +2,9 @@ import json
 import zipfile
 from datetime import datetime
 
+from supplyguard.config import DEFAULT_CONFIG
 from supplyguard.corpus_stats import CorpusStats
+from supplyguard.errors import CorpusError
 from supplyguard.helpers.data_helpers import (
     has_affected_package,
     has_description,
@@ -12,16 +14,15 @@ from supplyguard.helpers.data_helpers import (
     is_valid_advisory,
     is_withdrawn_advisory,
 )
-from supplyguard.paths import RAW_DATA_DIR
 
 START_DATE = datetime.fromisoformat("2022-01-01T00:00:00+00:00")
 CUTOFF_DATE = datetime.fromisoformat("2026-07-21T23:59:59+00:00")
 
 ZIP_FILES = {
-    "npm": RAW_DATA_DIR / "npm.zip",
-    "Maven": RAW_DATA_DIR / "Maven.zip",
-    "Go": RAW_DATA_DIR / "go.zip",
-    "PyPI": RAW_DATA_DIR / "pypi.zip",
+    "npm": DEFAULT_CONFIG.paths.raw_data_dir / "npm.zip",
+    "Maven": DEFAULT_CONFIG.paths.raw_data_dir / "Maven.zip",
+    "Go": DEFAULT_CONFIG.paths.raw_data_dir / "go.zip",
+    "PyPI": DEFAULT_CONFIG.paths.raw_data_dir / "pypi.zip",
 }
 
 
@@ -29,7 +30,15 @@ def inspect_zip(ecosystem, zip_path):
 
     stats = CorpusStats()
 
-    with zipfile.ZipFile(zip_path, "r") as archive:
+    if not zip_path.is_file():
+        raise CorpusError(f"Raw advisory archive not found: {zip_path}")
+
+    try:
+        archive_context = zipfile.ZipFile(zip_path, "r")
+    except (OSError, zipfile.BadZipFile) as error:
+        raise CorpusError(f"Could not open advisory archive '{zip_path}': {error}") from error
+
+    with archive_context as archive:
         for filename in archive.namelist():
             if filename.endswith("/") or not filename.lower().endswith(".json"):
                 continue

@@ -10,11 +10,12 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import numpy as np
 import torch
 
-RANDOM_SEED = 42
-DEVICE = "cpu"
+from supplyguard.config import DEFAULT_CONFIG
 
-random.seed(RANDOM_SEED)
-np.random.seed(RANDOM_SEED)
-torch.manual_seed(RANDOM_SEED)
-torch.set_num_threads(1)
-torch.use_deterministic_algorithms(True)
+runtime_config = DEFAULT_CONFIG.runtime
+
+random.seed(runtime_config.random_seed)
+np.random.seed(runtime_config.random_seed)
+torch.manual_seed(runtime_config.random_seed)
+torch.set_num_threads(runtime_config.torch_threads)
+torch.use_deterministic_algorithms(runtime_config.deterministic_algorithms)

@@ -33,6 +33,7 @@ supplyguard-preprocess = "supplyguard.preprocess:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = true
 
 [tool.setuptools.package-data]
 supplyguard = ["evaluation/evaluation_set.json"]

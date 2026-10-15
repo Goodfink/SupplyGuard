@@ -1,12 +1,10 @@
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from supplyguard.paths import (
-    DEFAULT_CORPUS_PATH,
-    DEFAULT_RESULTS_FILE,
-    EVALUATION_FILE,
-)
+from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
+from supplyguard.errors import ConfigurationError, SupplyGuardError
 
 
 def format_optional_percentage(value):
@@ -45,17 +43,23 @@ def print_evaluation_summary(label, stats):
     )
 
 
-def load_evaluation_set():
+def load_evaluation_set(evaluation_file=DEFAULT_CONFIG.paths.evaluation_file):
     """Load evaluation questions bundled with SupplyGuard."""
-    with EVALUATION_FILE.open(encoding="utf-8") as file:
-        return json.load(file)
+    try:
+        with evaluation_file.open(encoding="utf-8") as file:
+            return json.load(file)
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigurationError(
+            f"Could not load evaluation set '{evaluation_file}': {error}"
+        ) from error
 
 
-def setup_system(corpus_path=DEFAULT_CORPUS_PATH):
+def setup_system(
+    corpus_path=DEFAULT_CONFIG.paths.corpus_path,
+    config: SupplyGuardConfig = DEFAULT_CONFIG,
+):
     """Initialize retrieval and LLM systems."""
-    from supplyguard.llm.llm_setup import HuggingFaceLLM
     from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
-    from supplyguard.retrieval.dense_retrieval import DenseRetriever
 
     records = load_corpus(corpus_path)
 
@@ -64,15 +68,15 @@ def setup_system(corpus_path=DEFAULT_CORPUS_PATH):
     bm25.build_index(records)
 
     print("\n2. Setting up dense retriever...")
-    dense = DenseRetriever()
+    from supplyguard.retrieval.dense_retrieval import DenseRetriever
+
+    dense = DenseRetriever(config.models)
     dense.build_index(records)
 
     print("\n3. Loading LLM (this takes 2-3 minutes on first run)...")
-    try:
-        llm = HuggingFaceLLM()
-    except Exception as error:
-        print(f"   ✗ LLM Error: {error}")
-        return None, None, None, None
+    from supplyguard.llm.llm_setup import HuggingFaceLLM
+
+    llm = HuggingFaceLLM(config.models)
 
     return bm25, dense, llm, records
 
@@ -85,7 +89,7 @@ def run_single_query(question, bm25, dense, llm):
     pipeline = RAGPipeline(bm25, dense, llm)
 
     print("BM25 Results:")
-    bm25_result = pipeline.generate_answer(question, use_dense=False, top_k=5)
+    bm25_result = pipeline.generate_answer(question, use_dense=False)
     if bm25_result["retrieved_chunks"]:
         print(f"  Top chunk: {bm25_result['retrieved_chunks'][0]['document_id']}")
         print(f"  Score: {bm25_result['retrieved_chunks'][0]['score']:.4f}")
@@ -93,7 +97,7 @@ def run_single_query(question, bm25, dense, llm):
         print("  No matching advisory found")
 
     print("\nDense Retrieval Results:")
-    dense_result = pipeline.generate_answer(question, use_dense=True, top_k=5)
+    dense_result = pipeline.generate_answer(question, use_dense=True)
     if dense_result["retrieved_chunks"]:
         print(f"  Top chunk: {dense_result['retrieved_chunks'][0]['document_id']}")
         print(f"  Score: {dense_result['retrieved_chunks'][0]['score']:.4f}")
@@ -106,7 +110,7 @@ def run_single_query(question, bm25, dense, llm):
     print(f"  {dense_result['answer']}")
 
 
-def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_RESULTS_FILE):
+def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.results_file):
     """Run evaluation on all test questions."""
     from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
     from supplyguard.llm.answer_generation import generate_with_both_retrievers
@@ -203,7 +207,7 @@ def interactive_demo(bm25, dense, llm):
         if not question:
             continue
 
-        result = pipeline.generate_answer(question, use_dense=True, top_k=5)
+        result = pipeline.generate_answer(question, use_dense=True)
         print(f"\nAnswer: {result['answer']}")
         print("\nSources:")
         for chunk in result["retrieved_chunks"][:3]:
@@ -224,7 +228,7 @@ def build_parser():
     ask_parser.add_argument(
         "--corpus",
         type=Path,
-        default=DEFAULT_CORPUS_PATH,
+        default=DEFAULT_CONFIG.paths.corpus_path,
         help="Path to an advisory JSONL corpus",
     )
 
@@ -234,13 +238,13 @@ def build_parser():
     evaluate_parser.add_argument(
         "--corpus",
         type=Path,
-        default=DEFAULT_CORPUS_PATH,
+        default=DEFAULT_CONFIG.paths.corpus_path,
         help="Path to an advisory JSONL corpus",
     )
     evaluate_parser.add_argument(
         "--results-file",
         type=Path,
-        default=DEFAULT_RESULTS_FILE,
+        default=DEFAULT_CONFIG.paths.results_file,
         help="Where to write evaluation results",
     )
 
@@ -248,7 +252,7 @@ def build_parser():
     demo_parser.add_argument(
         "--corpus",
         type=Path,
-        default=DEFAULT_CORPUS_PATH,
+        default=DEFAULT_CONFIG.paths.corpus_path,
         help="Path to an advisory JSONL corpus",
     )
 
@@ -263,23 +267,25 @@ def main(argv=None):
         parser.print_help()
         return 0
 
-    if args.command == "inspect-corpus":
-        from supplyguard.corpus_inspection import main as inspect_corpus
+    try:
+        if args.command == "inspect-corpus":
+            from supplyguard.corpus_inspection import main as inspect_corpus
 
-        inspect_corpus()
+            inspect_corpus()
+            return 0
+
+        bm25, dense, llm, _ = setup_system(args.corpus)
+
+        if args.command == "ask":
+            run_single_query(args.question, bm25, dense, llm)
+        elif args.command == "evaluate":
+            run_full_evaluation(bm25, dense, llm, results_file=args.results_file)
+        elif args.command == "demo":
+            interactive_demo(bm25, dense, llm)
         return 0
-
-    bm25, dense, llm, _ = setup_system(args.corpus)
-    if bm25 is None:
-        return 1
-
-    if args.command == "ask":
-        run_single_query(args.question, bm25, dense, llm)
-    elif args.command == "evaluate":
-        run_full_evaluation(bm25, dense, llm, results_file=args.results_file)
-    elif args.command == "demo":
-        interactive_demo(bm25, dense, llm)
-    return 0
+    except SupplyGuardError as error:
+        print(f"SupplyGuard error: {error}", file=sys.stderr)
+        return error.exit_code
 
 
 if __name__ == "__main__":

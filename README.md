@@ -28,6 +28,8 @@ pip install -e ".[dev]"
 
 The first run downloads the pinned Qwen and MiniLM model revisions from Hugging Face. Later runs use the local model cache.
 
+Runtime paths, pinned model revisions, retrieval thresholds, and generation limits are centralized in `src/supplyguard/config.py`. Invalid configuration, corpus, index, and model states produce concise CLI errors with non-zero exit codes instead of partial `None` results.
+
 ## Tests
 
 Run the offline unit test suite without downloading either model:

@@ -1,6 +1,6 @@
 import json
 
-from supplyguard.paths import DEFAULT_RESULTS_FILE, EVALUATION_FILE
+from supplyguard.config import DEFAULT_CONFIG
 
 
 def main():
@@ -8,15 +8,15 @@ def main():
     from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
     from supplyguard.llm.llm_setup import HuggingFaceLLM
 
-    with EVALUATION_FILE.open(encoding="utf-8") as file:
+    with DEFAULT_CONFIG.paths.evaluation_file.open(encoding="utf-8") as file:
         evaluation_set = json.load(file)
 
     diagnostic_items = [item for item in evaluation_set if item["question_type"] == "factoid"]
-    llm = HuggingFaceLLM()
+    llm = HuggingFaceLLM(DEFAULT_CONFIG.models)
     metrics = EvaluationMetrics()
 
-    if DEFAULT_RESULTS_FILE.exists():
-        with DEFAULT_RESULTS_FILE.open(encoding="utf-8") as file:
+    if DEFAULT_CONFIG.paths.results_file.exists():
+        with DEFAULT_CONFIG.paths.results_file.open(encoding="utf-8") as file:
             saved_results = {item["question_id"]: item for item in json.load(file)}
     else:
         saved_results = {}
@@ -25,20 +25,15 @@ def main():
         question = question_item["question"]
         print(f"[{index}/{len(diagnostic_items)}] Q: {question}")
 
-        try:
-            diagnostic_prompt = f"""Answer the question briefly.
+        diagnostic_prompt = f"""Answer the question briefly.
 If you do not know, say "I don't know."
 
 Question: {question}
 Answer:"""
-            answer = llm.generate(
-                diagnostic_prompt,
-                max_tokens=80,
-                temperature=0.0,
-            )
-            result_text = answer if answer and answer.strip() else "No answer generated"
-        except Exception as error:
-            result_text = f"Error: {str(error)[:50]}"
+        result_text = llm.generate(
+            diagnostic_prompt,
+            max_tokens=DEFAULT_CONFIG.models.baseline_max_tokens,
+        )
 
         evaluation = metrics.evaluate_answer(
             result_text,
@@ -72,7 +67,7 @@ Answer:"""
         for item in evaluation_set
         if item["question_id"] in saved_results
     ]
-    with DEFAULT_RESULTS_FILE.open("w", encoding="utf-8") as file:
+    with DEFAULT_CONFIG.paths.results_file.open("w", encoding="utf-8") as file:
         json.dump(results, file, indent=2)
 
     automatic_correct = sum(
@@ -82,7 +77,7 @@ Answer:"""
         f"Automatic accuracy: {automatic_correct}/{len(diagnostic_items)} "
         f"({automatic_correct / len(diagnostic_items):.1%})"
     )
-    print(f"Results saved to: {DEFAULT_RESULTS_FILE}")
+    print(f"Results saved to: {DEFAULT_CONFIG.paths.results_file}")
 
 
 if __name__ == "__main__":

@@ -4,21 +4,21 @@ import zipfile
 from collections import defaultdict
 from datetime import datetime
 
+from supplyguard.config import DEFAULT_CONFIG
+from supplyguard.errors import CorpusError
 from supplyguard.helpers.data_helpers import get_published_date, is_valid_advisory
-from supplyguard.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR
 
 START_DATE = datetime.fromisoformat("2022-01-01T00:00:00+00:00")
 CUTOFF_DATE = datetime.fromisoformat("2026-07-21T23:59:59+00:00")
 
-RANDOM_SEED = 42
 SAMPLES_PER_YEAR = 50
 YEARS = range(START_DATE.year, CUTOFF_DATE.year + 1)
 
 ZIP_FILES = {
-    "npm": RAW_DATA_DIR / "npm.zip",
-    "Maven": RAW_DATA_DIR / "Maven.zip",
-    "Go": RAW_DATA_DIR / "go.zip",
-    "PyPI": RAW_DATA_DIR / "pypi.zip",
+    "npm": DEFAULT_CONFIG.paths.raw_data_dir / "npm.zip",
+    "Maven": DEFAULT_CONFIG.paths.raw_data_dir / "Maven.zip",
+    "Go": DEFAULT_CONFIG.paths.raw_data_dir / "go.zip",
+    "PyPI": DEFAULT_CONFIG.paths.raw_data_dir / "pypi.zip",
 }
 
 
@@ -27,7 +27,7 @@ def collect_candidates(ecosystem, zip_path):
     seen_ids = set()
 
     if not zip_path.exists():
-        raise FileNotFoundError(f"ZIP file not found: {zip_path}")
+        raise CorpusError(f"Raw advisory archive not found: {zip_path}")
 
     with zipfile.ZipFile(zip_path) as archive:
         for filename in archive.namelist():
@@ -77,9 +77,12 @@ def select_candidates(ecosystem, candidates_by_year):
         candidates.sort(key=lambda item: item["record"].get("id", ""))
 
         if len(candidates) < SAMPLES_PER_YEAR:
-            raise ValueError(f"{ecosystem} only has {len(candidates)} candidates for year {year}")
+            raise CorpusError(
+                f"{ecosystem} only has {len(candidates)} candidates for year {year}; "
+                f"at least {SAMPLES_PER_YEAR} are required"
+            )
 
-        random_generator = random.Random(f"{RANDOM_SEED}:{ecosystem}:{year}")
+        random_generator = random.Random(f"{DEFAULT_CONFIG.runtime.random_seed}:{ecosystem}:{year}")
         year_selection = random_generator.sample(candidates, SAMPLES_PER_YEAR)
         selected.extend(year_selection)
 
@@ -283,7 +286,7 @@ def write_jsonl(records, output_path):
 
 def write_manifest(records, output_path):
     manifest = {
-        "random_seed": RANDOM_SEED,
+        "random_seed": DEFAULT_CONFIG.runtime.random_seed,
         "start_date": START_DATE.isoformat(),
         "cutoff_date": CUTOFF_DATE.isoformat(),
         "samples_per_year": SAMPLES_PER_YEAR,
@@ -320,8 +323,8 @@ def main():
         )
     )
 
-    corpus_path = PROCESSED_DATA_DIR / "advisories.jsonl"
-    manifest_path = PROCESSED_DATA_DIR / "corpus_manifest.jsonl"
+    corpus_path = DEFAULT_CONFIG.paths.corpus_path
+    manifest_path = DEFAULT_CONFIG.paths.processed_data_dir / "corpus_manifest.jsonl"
 
     write_jsonl(processed_records, corpus_path)
     write_manifest(processed_records, manifest_path)

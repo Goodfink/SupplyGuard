@@ -1,29 +1,42 @@
-import json
+from typing import Any
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from supplyguard.reproducibility import DEVICE
-
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+from supplyguard.config import DEFAULT_CONFIG, ModelConfig
+from supplyguard.errors import (
+    ConfigurationError,
+    ModelInferenceError,
+    ModelLoadError,
+    RetrievalIndexError,
+)
 
 
 class DenseRetriever:
-    def __init__(self, model_name=MODEL_NAME, model_revision=MODEL_REVISION):
-        """Initialize dense retriever with embedding model"""
-        self.model = SentenceTransformer(model_name, revision=model_revision, device=DEVICE)
+    def __init__(self, config: ModelConfig = DEFAULT_CONFIG.models):
+        """Initialize the dense retriever with the configured embedding model."""
+        self.config = config
+        try:
+            self.model = SentenceTransformer(
+                config.embedding_model_name,
+                revision=config.embedding_model_revision,
+                device=config.device,
+            )
+        except Exception as error:
+            raise ModelLoadError(
+                f"Could not load embedding model '{config.embedding_model_name}' at revision "
+                f"'{config.embedding_model_revision}'. Check the model cache and network access. "
+                f"Underlying error: {error}"
+            ) from error
         self.model.eval()
-        self.model_name = model_name
-        self.model_revision = model_revision
-        self.records = []
-        self.embeddings = None
-        self.document_ids = []
+        self.records: list[dict[str, Any]] = []
+        self.embeddings: np.ndarray | None = None
+        self.document_ids: list[str] = []
 
     def build_index(self, records):
         """Build embedding index from records"""
         if not records:
-            raise ValueError("No records to index")
+            raise RetrievalIndexError("Cannot build the dense index from an empty corpus")
 
         self.records = records
         self.document_ids = []
@@ -35,28 +48,35 @@ class DenseRetriever:
             texts_to_embed.append(record.get("retrieval_text", ""))
 
         print(f"Encoding {len(texts_to_embed)} documents...")
-        self.embeddings = self.model.encode(
-            texts_to_embed,
-            batch_size=32,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            precision="float32",
-            normalize_embeddings=True,
-        )
-        print(f"Index built with {len(self.embeddings)} embeddings")
+        try:
+            embeddings = self.model.encode(
+                texts_to_embed,
+                batch_size=self.config.embedding_batch_size,
+                show_progress_bar=True,
+                convert_to_numpy=True,
+                precision="float32",
+                normalize_embeddings=True,
+            )
+        except Exception as error:
+            raise ModelInferenceError(f"Could not encode the advisory corpus: {error}") from error
+        self.embeddings = embeddings
+        print(f"Index built with {len(embeddings)} embeddings")
 
-    def search(self, query, top_k=5):
+    def search(self, query, top_k=DEFAULT_CONFIG.retrieval.top_k):
         """Search using semantic similarity"""
         if self.embeddings is None:
-            raise ValueError("Build the index before searching")
+            raise RetrievalIndexError("Build the dense index before searching")
 
         if top_k <= 0:
-            raise ValueError("top_k must be greater than 0")
+            raise ConfigurationError("top_k must be greater than 0")
 
         # Encode the query
-        query_embedding = self.model.encode(
-            query, convert_to_numpy=True, precision="float32", normalize_embeddings=True
-        )
+        try:
+            query_embedding = self.model.encode(
+                query, convert_to_numpy=True, precision="float32", normalize_embeddings=True
+            )
+        except Exception as error:
+            raise ModelInferenceError(f"Could not encode the search query: {error}") from error
 
         # Compute similarity (cosine similarity via dot product on normalized vectors)
         similarities = np.dot(self.embeddings, query_embedding)
@@ -82,20 +102,3 @@ class DenseRetriever:
             )
 
         return results
-
-
-def load_corpus(corpus_path):
-    """Load JSONL corpus"""
-    records = []
-    with corpus_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-                records.append(record)
-            except json.JSONDecodeError as e:
-                print(f"Error decoding line: {e}")
-                continue
-    return records

@@ -4,7 +4,8 @@ import pytest
 
 from supplyguard import cli
 from supplyguard.cli import build_parser, load_evaluation_set, main
-from supplyguard.paths import DEFAULT_CORPUS_PATH
+from supplyguard.config import DEFAULT_CONFIG
+from supplyguard.errors import CorpusError, ModelLoadError
 
 
 @pytest.mark.parametrize(
@@ -29,7 +30,7 @@ def test_ask_accepts_custom_corpus_path():
 def test_ask_uses_repository_corpus_by_default():
     args = build_parser().parse_args(["ask", "question"])
 
-    assert args.corpus == DEFAULT_CORPUS_PATH
+    assert args.corpus == DEFAULT_CONFIG.paths.corpus_path
 
 
 def test_main_without_command_prints_help_without_loading_models(capsys):
@@ -56,3 +57,20 @@ def test_evaluation_set_is_available_as_package_data():
 
     assert len(questions) == 14
     assert questions[0]["question_id"] == "q1"
+
+
+def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
+    def fail_setup(_corpus):
+        raise ModelLoadError("model cache is unavailable")
+
+    monkeypatch.setattr(cli, "setup_system", fail_setup)
+
+    assert main(["ask", "Which version is fixed?"]) == ModelLoadError.exit_code
+    assert capsys.readouterr().err == "SupplyGuard error: model cache is unavailable\n"
+
+
+def test_missing_corpus_fails_before_model_imports(tmp_path, capsys):
+    missing_path = tmp_path / "missing.jsonl"
+
+    assert main(["ask", "question", "--corpus", str(missing_path)]) == CorpusError.exit_code
+    assert "Could not read advisory corpus" in capsys.readouterr().err

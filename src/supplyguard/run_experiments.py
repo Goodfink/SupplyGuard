@@ -1,19 +1,19 @@
 import subprocess
 import sys
 
-from supplyguard.paths import PROJECT_ROOT
+from supplyguard.config import DEFAULT_CONFIG
 
 
 def main():
     """Run the no-retrieval baseline and both RAG evaluations."""
     subprocess.run(
         [sys.executable, "-u", "-m", "supplyguard.run_baseline"],
-        cwd=PROJECT_ROOT,
+        cwd=DEFAULT_CONFIG.paths.project_root,
         check=True,
     )
     subprocess.run(
         [sys.executable, "-u", "-m", "supplyguard.cli", "evaluate"],
-        cwd=PROJECT_ROOT,
+        cwd=DEFAULT_CONFIG.paths.project_root,
         check=True,
     )
 
