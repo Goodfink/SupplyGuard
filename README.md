@@ -25,6 +25,14 @@ pip install -r requirements.txt
 
 The first run downloads the pinned Qwen and MiniLM model revisions from Hugging Face. Later runs use the local model cache.
 
+## Tests
+
+Run the offline unit test suite without downloading either model:
+
+```bash
+python -m pytest
+```
+
 ## Reproduce Results
 
 Run all no-retrieval, BM25, and dense experiments with one command:
