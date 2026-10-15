@@ -3,15 +3,6 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.retrieval.bm25 import BM25Retriever, load_corpus as load_bm25_corpus
-from src.retrieval.dense_retrieval import DenseRetriever, load_corpus as load_dense_corpus
-from src.llm.llm_setup import HuggingFaceLLM
-from src.llm.answer_generation import RAGPipeline, generate_with_both_retrievers
-from src.evaluation.evaluation_metrics import EvaluationMetrics
-
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data" / "processed"
 EVAL_DIR = PROJECT_ROOT / "src" / "evaluation"
@@ -44,9 +35,13 @@ def load_evaluation_set():
 
 def setup_system():
     """Initialize retrieval and LLM systems"""
+    from src.llm.llm_setup import HuggingFaceLLM
+    from src.retrieval.bm25 import BM25Retriever, load_corpus
+    from src.retrieval.dense_retrieval import DenseRetriever
+
     # Load corpus
     corpus_path = DATA_DIR / "advisories.jsonl"
-    records = load_bm25_corpus(corpus_path)
+    records = load_corpus(corpus_path)
 
     # Setup BM25
     print("\n2. Setting up BM25 retriever...")
@@ -68,8 +63,10 @@ def setup_system():
     
     return bm25, dense, llm, records
 
-def test_single_query(question, bm25, dense, llm):
-    """Test a single query with both retrievers"""
+def run_single_query(question, bm25, dense, llm):
+    """Run a single query with both retrievers."""
+    from src.llm.answer_generation import RAGPipeline
+
     print(f"\nQuestion: {question}\n")
     
     pipeline = RAGPipeline(bm25, dense, llm)
@@ -95,6 +92,9 @@ def test_single_query(question, bm25, dense, llm):
 
 def run_full_evaluation(bm25, dense, llm):
     """Run evaluation on all test questions"""
+    from src.evaluation.evaluation_metrics import EvaluationMetrics
+    from src.llm.answer_generation import generate_with_both_retrievers
+
     
     evaluation_set = load_evaluation_set()
     metrics = EvaluationMetrics()
@@ -183,6 +183,8 @@ def run_full_evaluation(bm25, dense, llm):
 
 def interactive_demo(bm25, dense, llm):
     """Interactive Q&A demo"""
+    from src.llm.answer_generation import RAGPipeline
+
     print("Ask questions about vulnerabilities. Type 'exit' to quit.\n")
     
     pipeline = RAGPipeline(bm25, dense, llm)
@@ -204,7 +206,7 @@ def interactive_demo(bm25, dense, llm):
             print(f"  - {chunk['document_id']}: {chunk['summary']}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Test RAG System')
+    parser = argparse.ArgumentParser(description='Run the SupplyGuard RAG system')
     parser.add_argument('--test-setup', action='store_true', help='Test system setup only')
     parser.add_argument('--query', type=str, help='Test single query')
     parser.add_argument('--evaluate', choices=['all', 'sample'], help='Run evaluation')
@@ -224,7 +226,7 @@ def main():
     
     # Test single query
     if args.query:
-        test_single_query(args.query, bm25, dense, llm)
+        run_single_query(args.query, bm25, dense, llm)
         return
     
     # Run evaluation
