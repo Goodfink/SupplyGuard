@@ -2,7 +2,8 @@ import re
 
 TOKEN_PATTERN = re.compile(r"[@a-zA-Z0-9][@a-zA-Z0-9._/+:-]*")
 
-def tokenize(text):
+
+def tokenize(text: str | None) -> list[str]:
     if not text:
         return []
 

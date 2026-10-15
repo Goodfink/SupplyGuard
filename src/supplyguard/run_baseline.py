@@ -11,17 +11,13 @@ def main():
     with EVALUATION_FILE.open(encoding="utf-8") as file:
         evaluation_set = json.load(file)
 
-    diagnostic_items = [
-        item for item in evaluation_set if item["question_type"] == "factoid"
-    ]
+    diagnostic_items = [item for item in evaluation_set if item["question_type"] == "factoid"]
     llm = HuggingFaceLLM()
     metrics = EvaluationMetrics()
 
     if DEFAULT_RESULTS_FILE.exists():
         with DEFAULT_RESULTS_FILE.open(encoding="utf-8") as file:
-            saved_results = {
-                item["question_id"]: item for item in json.load(file)
-            }
+            saved_results = {item["question_id"]: item for item in json.load(file)}
     else:
         saved_results = {}
 
@@ -80,8 +76,7 @@ Answer:"""
         json.dump(results, file, indent=2)
 
     automatic_correct = sum(
-        saved_results[item["question_id"]]["no_retrieval"]["correct"]
-        for item in diagnostic_items
+        saved_results[item["question_id"]]["no_retrieval"]["correct"] for item in diagnostic_items
     )
     print(
         f"Automatic accuracy: {automatic_correct}/{len(diagnostic_items)} "

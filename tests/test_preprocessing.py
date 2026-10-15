@@ -1,11 +1,10 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from supplyguard.helpers.data_helpers import is_valid_advisory
 from supplyguard.preprocess import build_retrieval_text, normalize_advisory
 
-
-START_DATE = datetime(2022, 1, 1, tzinfo=timezone.utc)
-CUTOFF_DATE = datetime(2026, 12, 31, tzinfo=timezone.utc)
+START_DATE = datetime(2022, 1, 1, tzinfo=UTC)
+CUTOFF_DATE = datetime(2026, 12, 31, tzinfo=UTC)
 
 
 def raw_advisory():
@@ -65,9 +64,7 @@ def test_normalize_advisory_extracts_retrieval_fields():
 
     assert normalized["document_id"] == "GHSA-abcd-1234-5678"
     assert normalized["packages"][0]["name"] == "example-package"
-    assert normalized["fixed_versions"] == [
-        {"package": "example-package", "version": "2.1.0"}
-    ]
+    assert normalized["fixed_versions"] == [{"package": "example-package", "version": "2.1.0"}]
     assert "CVE-2025-1234" in normalized["retrieval_text"]
     assert "example-package fixed in 2.1.0" in normalized["retrieval_text"]
 
@@ -83,7 +80,4 @@ def test_build_retrieval_text_omits_empty_optional_sections():
         fixed_versions=[],
     )
 
-    assert text == (
-        "Advisory ID: GHSA-minimal-0000-0001\n"
-        "Summary: Minimal advisory"
-    )
+    assert text == ("Advisory ID: GHSA-minimal-0000-0001\nSummary: Minimal advisory")

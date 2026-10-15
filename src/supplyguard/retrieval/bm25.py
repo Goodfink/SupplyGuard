@@ -1,15 +1,20 @@
 import argparse
 import json
 import math
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from pathlib import Path
+from typing import Any
 
 from supplyguard.paths import DEFAULT_CORPUS_PATH
 
 from .tokenizer import tokenize
 
-def load_corpus(corpus_path):
-    records = []
+type AdvisoryRecord = dict[str, Any]
+type SearchResult = dict[str, Any]
+
+
+def load_corpus(corpus_path: Path) -> list[AdvisoryRecord]:
+    records: list[AdvisoryRecord] = []
 
     with corpus_path.open("r", encoding="utf-8") as f:
         for line_number, line in enumerate(f, start=1):
@@ -21,7 +26,7 @@ def load_corpus(corpus_path):
             try:
                 record = json.loads(line)
             except json.JSONDecodeError as error:
-                raise ValueError(f"Invalid JSON on line {line_number}: {error}")
+                raise ValueError(f"Invalid JSON on line {line_number}: {error}") from error
 
             if not record.get("retrieval_text"):
                 raise ValueError(f"Record on line {line_number} is missing retrieval_text")
@@ -30,21 +35,21 @@ def load_corpus(corpus_path):
 
         return records
 
-class BM25Retriever:
 
-    def __init__(self, k1 = 1.5, b = 0.75):
+class BM25Retriever:
+    def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
         self.k1 = k1
         self.b = b
 
-        self.records = []
-        self.document_lengths = []
+        self.records: list[AdvisoryRecord] = []
+        self.document_lengths: list[int] = []
         self.average_document_length = 0.0
 
-        self.document_frequencies = Counter()
-        self.inverse_document_frequencies = {}
-        self.postings = defaultdict(list)
+        self.document_frequencies: Counter[str] = Counter()
+        self.inverse_document_frequencies: dict[str, float] = {}
+        self.postings: defaultdict[str, list[tuple[int, int]]] = defaultdict(list)
 
-    def build_index(self, records):
+    def build_index(self, records: list[AdvisoryRecord]) -> None:
         if not records:
             raise ValueError("No records found")
 
@@ -69,9 +74,11 @@ class BM25Retriever:
         number_of_documents = len(records)
 
         for term, document_frequency in self.document_frequencies.items():
-            self.inverse_document_frequencies[term] = math.log(1 + (number_of_documents - document_frequency + 0.5) / (document_frequency + 0.5))
+            self.inverse_document_frequencies[term] = math.log(
+                1 + (number_of_documents - document_frequency + 0.5) / (document_frequency + 0.5)
+            )
 
-    def search(self, query, top_k = 5):
+    def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         if not self.records:
             raise ValueError("Build the BM25 index before searching")
 
@@ -93,13 +100,15 @@ class BM25Retriever:
 
             for document_index, term_frequency in self.postings[term]:
                 document_length = self.document_lengths[document_index]
-                length_normalization = 1 - self.b + self.b * (document_length / self.average_document_length)
+                length_normalization = (
+                    1 - self.b + self.b * (document_length / self.average_document_length)
+                )
                 numerator = term_frequency * (self.k1 + 1)
                 denominator = term_frequency + self.k1 * length_normalization
                 scores[document_index] += inverse_document_frequencies * numerator / denominator
 
         ranked_indices = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)
-        results = []
+        results: list[SearchResult] = []
 
         for document_index in ranked_indices:
             score = scores[document_index]
@@ -109,22 +118,25 @@ class BM25Retriever:
 
             record = self.records[document_index]
 
-            results.append({
-                "rank": len(results) + 1,
-                "score": score,
-                "document_id": record["document_id"],
-                "chunk_id": record["chunk_id"],
-                "summary": record["summary"],
-                "retrieval_text": record["retrieval_text"],
-                "record": record,
-            })
+            results.append(
+                {
+                    "rank": len(results) + 1,
+                    "score": score,
+                    "document_id": record["document_id"],
+                    "chunk_id": record["chunk_id"],
+                    "summary": record["summary"],
+                    "retrieval_text": record["retrieval_text"],
+                    "record": record,
+                }
+            )
 
             if len(results) == top_k:
                 break
 
         return results
 
-def print_results(results):
+
+def print_results(results: list[SearchResult]) -> None:
 
     if not results:
         print("No matching results found")
@@ -137,12 +149,17 @@ def print_results(results):
         print(f"Chunk ID: {result['chunk_id']}")
         print(f"Summary: {result['summary']}")
 
-def main():
-    parser = argparse.ArgumentParser(description = "Search OSV advisories using BM25")
 
-    parser.add_argument("--query", required = True, help = "Question or search query")
-    parser.add_argument("--top_k", required = True, type = int, default = 5, help = "Number of results to return")
-    parser.add_argument("--corpus", type = Path, default = DEFAULT_CORPUS_PATH, help = "Path to the advisories.jsonl")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Search OSV advisories using BM25")
+
+    parser.add_argument("--query", required=True, help="Question or search query")
+    parser.add_argument(
+        "--top_k", required=True, type=int, default=5, help="Number of results to return"
+    )
+    parser.add_argument(
+        "--corpus", type=Path, default=DEFAULT_CORPUS_PATH, help="Path to the advisories.jsonl"
+    )
     args = parser.parse_args()
 
     records = load_corpus(args.corpus)
@@ -152,10 +169,6 @@ def main():
 
     print_results(results)
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-

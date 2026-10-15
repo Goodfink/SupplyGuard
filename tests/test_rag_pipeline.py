@@ -81,13 +81,12 @@ def test_filter_retrieved_applies_relative_cutoff_and_context_limit(
     advisory_record_factory,
 ):
     records = [
-        advisory_record_factory(document_id=f"GHSA-test-0000-000{index}")
-        for index in range(1, 5)
+        advisory_record_factory(document_id=f"GHSA-test-0000-000{index}") for index in range(1, 5)
     ]
     results = [
         retrieval_result(record, score=score, rank=index)
         for index, (record, score) in enumerate(
-            zip(records, [20.0, 15.0, 13.0, 12.0]),
+            zip(records, [20.0, 15.0, 13.0, 12.0], strict=True),
             start=1,
         )
     ]
@@ -103,8 +102,7 @@ def test_extract_citations_deduplicates_supported_identifier_types():
     pipeline = RAGPipeline(FakeRetriever([]), FakeRetriever([]), llm=FakeLLM())
 
     citations = pipeline.extract_citations(
-        "[GHSA-abcd-1234-5678] [CVE-2025-1234] "
-        "[GHSA-abcd-1234-5678] [GO-2025-1000]"
+        "[GHSA-abcd-1234-5678] [CVE-2025-1234] [GHSA-abcd-1234-5678] [GO-2025-1000]"
     )
 
     assert set(citations) == {

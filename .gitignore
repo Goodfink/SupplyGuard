@@ -19,6 +19,8 @@ data/indexes/
 data/embeddings/
 
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 tmp/
 build/
 dist/

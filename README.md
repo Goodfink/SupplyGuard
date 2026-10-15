@@ -1,5 +1,8 @@
 # SupplyGuard
 
+[![Quality](https://github.com/Goodfink/SupplyGuard/actions/workflows/quality.yml/badge.svg)](https://github.com/Goodfink/SupplyGuard/actions/workflows/quality.yml)
+![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
+
 SupplyGuard is a retrieval-augmented generation system for answering questions about open-source software security advisories. It compares BM25 and dense semantic retrieval using the same corpus, local language model, prompt, generation settings, and evaluation set.
 
 ## System
@@ -11,7 +14,7 @@ SupplyGuard is a retrieval-augmented generation system for answering questions a
 - Evaluation: 10 factoid, 2 multi-hop, and 2 unanswerable questions
 - Baseline: the 10 factoid questions answered without retrieval
 
-The tracked corpus is stored in `data/processed/advisories.jsonl`. The evaluation set is stored in `src/evaluation/evaluation_set.json`.
+The tracked corpus is stored in `data/processed/advisories.jsonl`. The evaluation set is stored in `src/supplyguard/evaluation/evaluation_set.json`.
 
 ## Setup
 
@@ -31,6 +34,14 @@ Run the offline unit test suite without downloading either model:
 
 ```bash
 python -m pytest
+```
+
+Run the complete local quality suite:
+
+```bash
+ruff format --check src tests
+ruff check src tests
+mypy
 ```
 
 ## Reproduce Results

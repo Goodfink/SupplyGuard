@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class CorpusStats:
     total_json: int = 0
