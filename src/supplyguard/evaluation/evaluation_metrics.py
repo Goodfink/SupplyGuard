@@ -29,6 +29,12 @@ class EvaluationMetrics:
         truth_set = set(ground_truth_ids)
         return cited_set == truth_set
 
+    def evaluate_citation_grounding(self, cited_ids, retrieved_document_ids):
+        """Check that every cited advisory was present in retrieved context."""
+        cited_set = set(cited_ids)
+        retrieved_set = set(retrieved_document_ids)
+        return bool(cited_set) and cited_set.issubset(retrieved_set)
+
     def normalize_text(self, text):
         text = unicodedata.normalize("NFKD", text).lower()
         return " ".join(re.findall(r"[a-z0-9]+", text))
@@ -42,8 +48,14 @@ class EvaluationMetrics:
         required_answer_terms=None,
         forbidden_answer_terms=None,
         require_citations=True,
+        cited_ids=None,
+        retrieved_document_ids=None,
     ):
         """Evaluate a single answer"""
+
+        cited_ids = (
+            set(cited_ids) if cited_ids is not None else self.extract_citations(generated_answer)
+        )
 
         result = {
             "answer_text": generated_answer,
@@ -52,7 +64,9 @@ class EvaluationMetrics:
             "correct": False,
             "has_appropriate_idontknow": False,
             "citations_accurate": False if require_citations else None,
+            "citations_grounded": False if require_citations else None,
             "citations_required": require_citations,
+            "cited_advisory_ids": sorted(cited_ids),
             "notes": [],
         }
 
@@ -66,9 +80,8 @@ class EvaluationMetrics:
                 result["notes"].append("Should have said 'I don't know'")
 
             if require_citations:
-                # Should have no citations for unanswerable
-                cited_ids = self.extract_citations(generated_answer)
                 result["citations_accurate"] = len(cited_ids) == 0
+                result["citations_grounded"] = len(cited_ids) == 0
                 if len(cited_ids) > 0:
                     result["notes"].append(f"Incorrectly cited: {cited_ids}")
             else:
@@ -77,8 +90,6 @@ class EvaluationMetrics:
             return result
 
         # For factoid and multi-hop questions
-        cited_ids = self.extract_citations(generated_answer)
-
         # Check citations only for systems that are expected to cite retrieved evidence.
         if require_citations and ground_truth_chunk_ids:
             citations_match = self.evaluate_citation_accuracy(cited_ids, ground_truth_chunk_ids)
@@ -88,6 +99,19 @@ class EvaluationMetrics:
                 result["notes"].append(
                     f"Citations don't match. Expected from {ground_truth_chunk_ids}, got {cited_ids}"
                 )
+
+            if retrieved_document_ids is not None:
+                citations_grounded = self.evaluate_citation_grounding(
+                    cited_ids,
+                    retrieved_document_ids,
+                )
+                result["citations_grounded"] = citations_grounded
+                if not citations_grounded:
+                    result["notes"].append(
+                        "One or more citations were not present in retrieved context"
+                    )
+            else:
+                result["citations_grounded"] = None
         elif not require_citations:
             result["notes"].append("Citation grading not applicable")
 
@@ -122,7 +146,11 @@ class EvaluationMetrics:
         citation_results = [
             r for r in answerable_results if r.get("citations_accurate") is not None
         ]
+        grounding_results = [
+            r for r in answerable_results if r.get("citations_grounded") is not None
+        ]
         citations_accurate = sum(1 for r in citation_results if r["citations_accurate"])
+        citations_grounded = sum(1 for r in grounding_results if r["citations_grounded"])
         appropriate_idontknow = sum(1 for r in all_results if r["has_appropriate_idontknow"])
 
         unanswerable_count = sum(1 for r in all_results if r["question_type"] == "unanswerable")
@@ -143,6 +171,10 @@ class EvaluationMetrics:
             if citation_results
             else None,
             "citation_evaluable_questions": len(citation_results),
+            "citation_grounding_accuracy": citations_grounded / len(grounding_results)
+            if grounding_results
+            else None,
+            "citation_grounding_evaluable_questions": len(grounding_results),
             "idontknow_accuracy": appropriate_idontknow / unanswerable_count
             if unanswerable_count > 0
             else 0,

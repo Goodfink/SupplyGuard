@@ -12,7 +12,7 @@ def create_rag_prompt(question, retrieved_chunks):
 
 If not found, say: "I don't know"
 
-Always cite the advisory ID, e.g., [GHSA-12345]
+Do not add citations or a sources section. SupplyGuard attaches verified sources separately.
 
 ADVISORIES:
 {context}
