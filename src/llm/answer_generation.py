@@ -1,13 +1,17 @@
 import re
+
 from src.llm.prompt_template import create_rag_prompt
-from src.llm.llm_setup import HuggingFaceLLM
 
 class RAGPipeline:
     def __init__(self, bm25_retriever, dense_retriever, llm=None, bm25_min_score=10.0, dense_min_score=0.44, max_contexts=3):
         """Initialize RAG pipeline"""
         self.bm25_retriever = bm25_retriever
         self.dense_retriever = dense_retriever
-        self.llm = llm or HuggingFaceLLM()
+        if llm is None:
+            from src.llm.llm_setup import HuggingFaceLLM
+
+            llm = HuggingFaceLLM()
+        self.llm = llm
         self.bm25_min_score = bm25_min_score
         self.dense_min_score = dense_min_score
         self.max_contexts = max_contexts
