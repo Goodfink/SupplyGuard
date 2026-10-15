@@ -40,13 +40,13 @@ Results are written to `evaluation_results.json`. Random seeds, dependency versi
 Ask one question using both retrievers:
 
 ```bash
-python src/test_rag_system.py --query "Which version fixes the vulnerability in github.com/dhowden/tag?"
+python -m src.rag_cli --query "Which version fixes the vulnerability in github.com/dhowden/tag?"
 ```
 
 Run the interactive dense-retrieval demo:
 
 ```bash
-python src/test_rag_system.py --demo
+python -m src.rag_cli --demo
 ```
 
 ## Results

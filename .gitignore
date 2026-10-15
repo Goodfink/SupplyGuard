@@ -17,3 +17,6 @@ env/
 
 data/indexes/
 data/embeddings/
+
+.pytest_cache/
+tmp/
