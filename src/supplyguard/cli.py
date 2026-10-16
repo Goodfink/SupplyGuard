@@ -41,6 +41,20 @@ def print_evaluation_summary(label, stats):
         "  Citation Accuracy (exact advisory IDs): "
         f"{format_optional_percentage(stats['citation_accuracy'])}"
     )
+    print(
+        "  Citation Grounding (citations present in context): "
+        f"{format_optional_percentage(stats['citation_grounding_accuracy'])}"
+    )
+
+
+def print_sources(sources):
+    """Print verified OSV source records returned by the RAG pipeline."""
+    if not sources:
+        return
+
+    print("  Sources:")
+    for source in sources:
+        print(f"    - {source['advisory_id']}: {source['url']}")
 
 
 def load_evaluation_set(evaluation_file=DEFAULT_CONFIG.paths.evaluation_file):
@@ -106,8 +120,10 @@ def run_single_query(question, bm25, dense, llm):
 
     print("\nBM25 Answer:")
     print(f"  {bm25_result['answer']}")
+    print_sources(bm25_result["sources"])
     print("\nDense Answer:")
     print(f"  {dense_result['answer']}")
+    print_sources(dense_result["sources"])
 
 
 def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.results_file):
@@ -129,6 +145,19 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.resu
         print(f"\n[{index}/{len(evaluation_set)}] {question_item['question'][:60]}...")
         result = generate_with_both_retrievers(question_item["question"], bm25, dense, llm)
 
+        bm25_cited_ids = [source["advisory_id"] for source in result["bm25"]["sources"]]
+        dense_cited_ids = [source["advisory_id"] for source in result["dense"]["sources"]]
+        bm25_retrieved_ids = [item["document_id"] for item in result["bm25"]["retrieved_chunks"]]
+        dense_retrieved_ids = [item["document_id"] for item in result["dense"]["retrieved_chunks"]]
+        bm25_context_advisory_ids = [
+            str(item["record"].get("advisory_id") or item["document_id"])
+            for item in result["bm25"]["retrieved_chunks"]
+        ]
+        dense_context_advisory_ids = [
+            str(item["record"].get("advisory_id") or item["document_id"])
+            for item in result["dense"]["retrieved_chunks"]
+        ]
+
         bm25_eval = metrics.evaluate_answer(
             result["bm25"]["answer"],
             question_item["ground_truth_answer"],
@@ -136,6 +165,8 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.resu
             question_item["ground_truth_chunk_ids"],
             question_item.get("required_answer_terms"),
             question_item.get("forbidden_answer_terms"),
+            cited_ids=bm25_cited_ids,
+            retrieved_document_ids=bm25_context_advisory_ids,
         )
         dense_eval = metrics.evaluate_answer(
             result["dense"]["answer"],
@@ -144,6 +175,8 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.resu
             question_item["ground_truth_chunk_ids"],
             question_item.get("required_answer_terms"),
             question_item.get("forbidden_answer_terms"),
+            cited_ids=dense_cited_ids,
+            retrieved_document_ids=dense_context_advisory_ids,
         )
         bm25_results.append(bm25_eval)
         dense_results.append(dense_eval)
@@ -158,17 +191,17 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.resu
                     "answer": result["bm25"]["answer"],
                     "correct": bm25_eval["correct"],
                     "citations_accurate": bm25_eval["citations_accurate"],
-                    "retrieved_document_ids": [
-                        item["document_id"] for item in result["bm25"]["retrieved_chunks"]
-                    ],
+                    "citations_grounded": bm25_eval["citations_grounded"],
+                    "sources": result["bm25"]["sources"],
+                    "retrieved_document_ids": bm25_retrieved_ids,
                 },
                 "dense": {
                     "answer": result["dense"]["answer"],
                     "correct": dense_eval["correct"],
                     "citations_accurate": dense_eval["citations_accurate"],
-                    "retrieved_document_ids": [
-                        item["document_id"] for item in result["dense"]["retrieved_chunks"]
-                    ],
+                    "citations_grounded": dense_eval["citations_grounded"],
+                    "sources": result["dense"]["sources"],
+                    "retrieved_document_ids": dense_retrieved_ids,
                 },
             }
         )
@@ -209,9 +242,7 @@ def interactive_demo(bm25, dense, llm):
 
         result = pipeline.generate_answer(question, use_dense=True)
         print(f"\nAnswer: {result['answer']}")
-        print("\nSources:")
-        for chunk in result["retrieved_chunks"][:3]:
-            print(f"  - {chunk['document_id']}: {chunk['summary']}")
+        print_sources(result["sources"])
 
 
 def build_parser():

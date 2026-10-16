@@ -59,6 +59,21 @@ def test_evaluation_set_is_available_as_package_data():
     assert questions[0]["question_id"] == "q1"
 
 
+def test_print_sources_displays_verified_advisory_link(capsys):
+    cli.print_sources(
+        [
+            {
+                "advisory_id": "GHSA-abcd-1234-5678",
+                "url": "https://osv.dev/vulnerability/GHSA-abcd-1234-5678",
+            }
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "GHSA-abcd-1234-5678" in output
+    assert "https://osv.dev/vulnerability/GHSA-abcd-1234-5678" in output
+
+
 def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
     def fail_setup(_corpus):
         raise ModelLoadError("model cache is unavailable")

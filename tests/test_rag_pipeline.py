@@ -46,9 +46,20 @@ def test_generate_answer_uses_filtered_bm25_context(advisory_record_factory):
 
     result = pipeline.generate_answer("What affects example-package?", use_dense=False)
 
-    assert result["answer"] == llm.answer
+    assert result["answer"] == "Grounded answer"
     assert result["retrieval_method"] == "bm25"
     assert result["num_chunks"] == 1
+    assert result["num_sources"] == 1
+    assert result["sources"] == [
+        {
+            "advisory_id": record["document_id"],
+            "chunk_id": record["chunk_id"],
+            "url": f"https://osv.dev/vulnerability/{record['document_id']}",
+            "summary": record["summary"],
+            "rank": 1,
+            "score": 20.0,
+        }
+    ]
     assert record["retrieval_text"] in llm.calls[0][0]
     assert llm.calls[0][1] == {"max_tokens": DEFAULT_CONFIG.models.answer_max_tokens}
     assert bm25.queries == [("What affects example-package?", 5)]
@@ -64,6 +75,7 @@ def test_unknown_identifier_abstains_without_calling_llm(advisory_record_factory
 
     assert result["answer"] == "I don't know"
     assert result["retrieved_chunks"] == []
+    assert result["sources"] == []
     assert llm.calls == []
 
 
@@ -109,18 +121,16 @@ def test_filter_retrieved_applies_relative_cutoff_and_context_limit(
     assert [item["score"] for item in filtered] == [20.0, 15.0]
 
 
-def test_extract_citations_deduplicates_supported_identifier_types():
-    pipeline = RAGPipeline(FakeRetriever([]), FakeRetriever([]), llm=FakeLLM())
+def test_model_cannot_cite_an_advisory_that_was_not_retrieved(advisory_record_factory):
+    record = advisory_record_factory(document_id="GHSA-retrieved-0000-0001")
+    retriever = FakeRetriever([retrieval_result(record, score=20.0)])
+    llm = FakeLLM("Use the fixed release [GHSA-hallucinated-0000-9999]")
+    pipeline = RAGPipeline(retriever, retriever, llm=llm)
 
-    citations = pipeline.extract_citations(
-        "[GHSA-abcd-1234-5678] [CVE-2025-1234] [GHSA-abcd-1234-5678] [GO-2025-1000]"
-    )
+    result = pipeline.generate_answer("What is the fixed release?", use_dense=False)
 
-    assert set(citations) == {
-        "GHSA-abcd-1234-5678",
-        "CVE-2025-1234",
-        "GO-2025-1000",
-    }
+    assert result["answer"] == "Use the fixed release"
+    assert [source["advisory_id"] for source in result["sources"]] == [record["document_id"]]
 
 
 def test_empty_retrieval_abstains_without_calling_llm():
@@ -132,7 +142,35 @@ def test_empty_retrieval_abstains_without_calling_llm():
 
     assert result["answer"] == "I don't know"
     assert result["retrieved_chunks"] == []
+    assert result["sources"] == []
     assert llm.calls == []
+
+
+def test_model_abstention_has_no_sources_even_when_context_was_retrieved(
+    advisory_record_factory,
+):
+    record = advisory_record_factory()
+    retriever = FakeRetriever([retrieval_result(record, score=20.0)])
+    pipeline = RAGPipeline(retriever, retriever, llm=FakeLLM("I don't know"))
+
+    result = pipeline.generate_answer("What is the fix?", use_dense=False)
+
+    assert result["answer"] == "I don't know"
+    assert result["retrieved_chunks"]
+    assert result["sources"] == []
+
+
+def test_citation_only_model_output_is_rejected(advisory_record_factory):
+    record = advisory_record_factory()
+    retriever = FakeRetriever([retrieval_result(record, score=20.0)])
+    pipeline = RAGPipeline(
+        retriever,
+        retriever,
+        llm=FakeLLM("[GHSA-hallucinated-0000-9999]"),
+    )
+
+    with pytest.raises(ModelGenerationError, match="no answer"):
+        pipeline.generate_answer("What is the fix?", use_dense=False)
 
 
 def test_generation_errors_are_not_converted_to_empty_answers(advisory_record_factory):

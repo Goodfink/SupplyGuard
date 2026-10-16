@@ -11,6 +11,7 @@ SupplyGuard is a retrieval-augmented generation system for answering questions a
 - Classical retrieval: BM25
 - Dense retrieval: `sentence-transformers/all-MiniLM-L6-v2`
 - Local language model: `Qwen/Qwen2.5-0.5B-Instruct`
+- Sources: programmatically attached OSV links restricted to retrieved advisories
 - Evaluation: 10 factoid, 2 multi-hop, and 2 unanswerable questions
 - Baseline: the 10 factoid questions answered without retrieval
 
@@ -64,6 +65,8 @@ Ask one question using both retrievers:
 supplyguard ask "Which version fixes the vulnerability in github.com/dhowden/tag?"
 ```
 
+Answers include structured source records with advisory IDs and canonical OSV links. The language model cannot add a source that was not present in its retrieved context, and abstentions include no sources.
+
 Run the interactive dense-retrieval demo:
 
 ```bash
@@ -83,5 +86,5 @@ Retrieval substantially improves factoid accuracy over the no-retrieval baseline
 ## Limitations
 
 - The 0.5B model sometimes extracts the wrong fact from correctly retrieved evidence.
-- Generated inline citations are inconsistent.
+- Sources identify the retrieved evidence supplied to the model, but they do not yet provide claim-level faithfulness guarantees.
 - Dense retrieval misses one required advisory on a multi-hop question.

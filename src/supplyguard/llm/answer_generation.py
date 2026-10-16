@@ -1,7 +1,9 @@
 import re
 
 from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
+from supplyguard.errors import ModelGenerationError
 from supplyguard.llm.prompt_template import create_rag_prompt
+from supplyguard.sources import build_advisory_sources, is_abstention, remove_inline_citations
 
 
 class RAGPipeline:
@@ -79,23 +81,29 @@ class RAGPipeline:
 
         if retrieved_chunks:
             prompt = create_rag_prompt(question, retrieved_chunks)
-            answer = self.llm.generate(prompt, max_tokens=self.config.models.answer_max_tokens)
+            model_answer = self.llm.generate(
+                prompt,
+                max_tokens=self.config.models.answer_max_tokens,
+            )
+            answer = remove_inline_citations(model_answer)
+            if not answer:
+                raise ModelGenerationError(
+                    "The language model returned no answer after untrusted citations were removed"
+                )
+            sources = [] if is_abstention(answer) else build_advisory_sources(retrieved)
         else:
             answer = "I don't know"
+            sources = []
 
         return {
             "question": question,
             "answer": answer,
+            "sources": sources,
             "retrieved_chunks": retrieved,
             "retrieval_method": retrieval_method,
             "num_chunks": len(retrieved),
+            "num_sources": len(sources),
         }
-
-    def extract_citations(self, answer_text):
-        """Extract citation IDs from answer"""
-        # Find all [GHSA-...] or [GO-...] patterns
-        citations = re.findall(r"\[(GHSA-[^\]]+|GO-[^\]]+|CVE-[^\]]+)\]", answer_text)
-        return list(set(citations))  # Remove duplicates
 
 
 def generate_with_both_retrievers(question, bm25_retriever, dense_retriever, llm):
