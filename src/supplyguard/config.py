@@ -1,6 +1,6 @@
 """Validated runtime configuration for SupplyGuard."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from supplyguard.errors import ConfigurationError
@@ -132,3 +132,52 @@ class SupplyGuardConfig:
 
 
 DEFAULT_CONFIG = SupplyGuardConfig()
+
+
+def with_model_overrides(
+    config: SupplyGuardConfig,
+    *,
+    language_model_name: str | None = None,
+    language_model_revision: str | None = None,
+    embedding_model_name: str | None = None,
+    embedding_model_revision: str | None = None,
+    device: str | None = None,
+) -> SupplyGuardConfig:
+    """Return a validated config with optional CLI model selections applied.
+
+    Selecting a different model without a revision uses its ``main`` revision. Users can pass an
+    immutable commit hash when they need a fully reproducible run.
+    """
+
+    def resolve_revision(name: str | None, revision: str | None, default: str) -> str:
+        if revision is not None:
+            return revision
+        if name is not None:
+            return "main"
+        return default
+
+    models = replace(
+        config.models,
+        language_model_name=(
+            config.models.language_model_name
+            if language_model_name is None
+            else language_model_name
+        ),
+        language_model_revision=resolve_revision(
+            language_model_name,
+            language_model_revision,
+            config.models.language_model_revision,
+        ),
+        embedding_model_name=(
+            config.models.embedding_model_name
+            if embedding_model_name is None
+            else embedding_model_name
+        ),
+        embedding_model_revision=resolve_revision(
+            embedding_model_name,
+            embedding_model_revision,
+            config.models.embedding_model_revision,
+        ),
+        device=config.models.device if device is None else device,
+    )
+    return replace(config, models=models)

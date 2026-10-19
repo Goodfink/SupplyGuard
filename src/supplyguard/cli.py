@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
+from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig, with_model_overrides
 from supplyguard.errors import ConfigurationError, SupplyGuardError
 
 
@@ -77,6 +77,17 @@ def setup_system(
     from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
 
     records = load_corpus(corpus_path)
+
+    print("\nModel configuration:")
+    print(
+        f"  Language: {config.models.language_model_name} "
+        f"(revision: {config.models.language_model_revision})"
+    )
+    print(
+        f"  Embedding: {config.models.embedding_model_name} "
+        f"(revision: {config.models.embedding_model_revision})"
+    )
+    print(f"  Device: {config.models.device}")
 
     print("\n1. Setting up BM25 retriever...")
     bm25 = BM25Retriever()
@@ -258,7 +269,7 @@ def build_parser():
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    def add_index_arguments(command_parser):
+    def add_runtime_arguments(command_parser):
         command_parser.add_argument(
             "--corpus",
             type=Path,
@@ -270,17 +281,37 @@ def build_parser():
             action="store_true",
             help="Re-encode the corpus even when a valid dense index is cached",
         )
+        command_parser.add_argument(
+            "--language-model",
+            help="Hugging Face model ID or local path for answer generation",
+        )
+        command_parser.add_argument(
+            "--language-model-revision",
+            help="Language-model commit, tag, or branch (defaults to main for a custom model)",
+        )
+        command_parser.add_argument(
+            "--embedding-model",
+            help="Sentence Transformers model ID or local path for dense retrieval",
+        )
+        command_parser.add_argument(
+            "--embedding-model-revision",
+            help="Embedding-model commit, tag, or branch (defaults to main for a custom model)",
+        )
+        command_parser.add_argument(
+            "--device",
+            help="Inference device understood by PyTorch, such as cpu, cuda, cuda:0, or mps",
+        )
 
     ask_parser = subparsers.add_parser(
         "ask", help="Ask one question using BM25 and dense retrieval."
     )
     ask_parser.add_argument("question", help="Security advisory question")
-    add_index_arguments(ask_parser)
+    add_runtime_arguments(ask_parser)
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Run the complete BM25 and dense evaluation."
     )
-    add_index_arguments(evaluate_parser)
+    add_runtime_arguments(evaluate_parser)
     evaluate_parser.add_argument(
         "--results-file",
         type=Path,
@@ -289,7 +320,7 @@ def build_parser():
     )
 
     demo_parser = subparsers.add_parser("demo", help="Start the interactive dense-retrieval demo.")
-    add_index_arguments(demo_parser)
+    add_runtime_arguments(demo_parser)
 
     subparsers.add_parser("inspect-corpus", help="Inspect the configured raw OSV archives.")
     return parser
@@ -309,7 +340,19 @@ def main(argv=None):
             inspect_corpus()
             return 0
 
-        bm25, dense, llm, _ = setup_system(args.corpus, rebuild_index=args.rebuild_index)
+        config = with_model_overrides(
+            DEFAULT_CONFIG,
+            language_model_name=args.language_model,
+            language_model_revision=args.language_model_revision,
+            embedding_model_name=args.embedding_model,
+            embedding_model_revision=args.embedding_model_revision,
+            device=args.device,
+        )
+        bm25, dense, llm, _ = setup_system(
+            args.corpus,
+            config=config,
+            rebuild_index=args.rebuild_index,
+        )
 
         if args.command == "ask":
             run_single_query(args.question, bm25, dense, llm)

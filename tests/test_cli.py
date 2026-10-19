@@ -4,7 +4,7 @@ import pytest
 
 from supplyguard import cli
 from supplyguard.cli import build_parser, load_evaluation_set, main
-from supplyguard.config import DEFAULT_CONFIG
+from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
 from supplyguard.errors import CorpusError, ModelLoadError
 
 
@@ -37,6 +37,31 @@ def test_model_commands_accept_forced_index_rebuild(command):
     assert build_parser().parse_args(arguments).rebuild_index is True
 
 
+def test_ask_accepts_custom_local_model_configuration():
+    args = build_parser().parse_args(
+        [
+            "ask",
+            "question",
+            "--language-model",
+            "/models/local-chat",
+            "--language-model-revision",
+            "chat-commit",
+            "--embedding-model",
+            "organization/embeddings",
+            "--embedding-model-revision",
+            "embedding-commit",
+            "--device",
+            "cuda:0",
+        ]
+    )
+
+    assert args.language_model == "/models/local-chat"
+    assert args.language_model_revision == "chat-commit"
+    assert args.embedding_model == "organization/embeddings"
+    assert args.embedding_model_revision == "embedding-commit"
+    assert args.device == "cuda:0"
+
+
 def test_ask_uses_repository_corpus_by_default():
     args = build_parser().parse_args(["ask", "question"])
 
@@ -53,8 +78,8 @@ def test_main_routes_ask_command(monkeypatch):
     received = []
     setup_calls = []
 
-    def fake_setup(corpus, rebuild_index=False):
-        setup_calls.append((corpus, rebuild_index))
+    def fake_setup(corpus, config=DEFAULT_CONFIG, rebuild_index=False):
+        setup_calls.append((corpus, config, rebuild_index))
         return systems
 
     monkeypatch.setattr(cli, "setup_system", fake_setup)
@@ -65,7 +90,7 @@ def test_main_routes_ask_command(monkeypatch):
     )
 
     assert main(["ask", "Which version is fixed?"]) == 0
-    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, False)]
+    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, DEFAULT_CONFIG, False)]
     assert received == [("Which version is fixed?", *systems[:3])]
 
 
@@ -75,12 +100,50 @@ def test_main_forwards_forced_index_rebuild(monkeypatch):
     monkeypatch.setattr(
         cli,
         "setup_system",
-        lambda corpus, rebuild_index=False: setup_calls.append((corpus, rebuild_index)) or systems,
+        lambda corpus, config=DEFAULT_CONFIG, rebuild_index=False: (
+            setup_calls.append((corpus, config, rebuild_index)) or systems
+        ),
     )
     monkeypatch.setattr(cli, "run_single_query", lambda *_arguments: None)
 
     assert main(["ask", "question", "--rebuild-index"]) == 0
-    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, True)]
+    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, DEFAULT_CONFIG, True)]
+
+
+def test_main_forwards_custom_model_configuration(monkeypatch):
+    systems = (object(), object(), object(), [])
+    setup_calls = []
+
+    def fake_setup(corpus, config=DEFAULT_CONFIG, rebuild_index=False):
+        setup_calls.append((corpus, config, rebuild_index))
+        return systems
+
+    monkeypatch.setattr(cli, "setup_system", fake_setup)
+    monkeypatch.setattr(cli, "run_single_query", lambda *_arguments: None)
+
+    assert (
+        main(
+            [
+                "ask",
+                "question",
+                "--language-model",
+                "organization/chat-model",
+                "--embedding-model",
+                "organization/embedding-model",
+                "--device",
+                "mps",
+            ]
+        )
+        == 0
+    )
+    _, configured, rebuild_index = setup_calls[0]
+    assert isinstance(configured, SupplyGuardConfig)
+    assert configured.models.language_model_name == "organization/chat-model"
+    assert configured.models.language_model_revision == "main"
+    assert configured.models.embedding_model_name == "organization/embedding-model"
+    assert configured.models.embedding_model_revision == "main"
+    assert configured.models.device == "mps"
+    assert rebuild_index is False
 
 
 def test_evaluation_set_is_available_as_package_data():
@@ -106,7 +169,7 @@ def test_print_sources_displays_verified_advisory_link(capsys):
 
 
 def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
-    def fail_setup(_corpus, rebuild_index=False):
+    def fail_setup(_corpus, config=DEFAULT_CONFIG, rebuild_index=False):
         raise ModelLoadError("model cache is unavailable")
 
     monkeypatch.setattr(cli, "setup_system", fail_setup)

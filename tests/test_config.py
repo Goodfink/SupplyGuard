@@ -2,7 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from supplyguard.config import ModelConfig, PathConfig, RetrievalConfig, RuntimeConfig
+from supplyguard.config import (
+    DEFAULT_CONFIG,
+    ModelConfig,
+    PathConfig,
+    RetrievalConfig,
+    RuntimeConfig,
+    with_model_overrides,
+)
 from supplyguard.errors import ConfigurationError
 
 
@@ -33,3 +40,51 @@ def test_path_config_derives_all_paths_from_project_root(tmp_path):
 def test_invalid_configuration_fails_fast(factory):
     with pytest.raises(ConfigurationError):
         factory()
+
+
+def test_model_overrides_preserve_pinned_defaults_when_omitted():
+    configured = with_model_overrides(DEFAULT_CONFIG)
+
+    assert configured == DEFAULT_CONFIG
+
+
+def test_custom_models_default_to_main_revision_and_preserve_other_settings():
+    configured = with_model_overrides(
+        DEFAULT_CONFIG,
+        language_model_name="organization/custom-chat-model",
+        embedding_model_name="organization/custom-embedding-model",
+        device="mps",
+    )
+
+    assert configured.models.language_model_name == "organization/custom-chat-model"
+    assert configured.models.language_model_revision == "main"
+    assert configured.models.embedding_model_name == "organization/custom-embedding-model"
+    assert configured.models.embedding_model_revision == "main"
+    assert configured.models.device == "mps"
+    assert configured.models.answer_max_tokens == DEFAULT_CONFIG.models.answer_max_tokens
+
+
+def test_explicit_model_revisions_are_preserved():
+    configured = with_model_overrides(
+        DEFAULT_CONFIG,
+        language_model_revision="language-commit",
+        embedding_model_revision="embedding-commit",
+    )
+
+    assert configured.models.language_model_revision == "language-commit"
+    assert configured.models.embedding_model_revision == "embedding-commit"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"language_model_name": ""},
+        {"language_model_revision": ""},
+        {"embedding_model_name": ""},
+        {"embedding_model_revision": ""},
+        {"device": ""},
+    ],
+)
+def test_empty_model_overrides_fail_fast(overrides):
+    with pytest.raises(ConfigurationError):
+        with_model_overrides(DEFAULT_CONFIG, **overrides)

@@ -38,6 +38,28 @@ Force a clean dense-index rebuild when troubleshooting or benchmarking:
 supplyguard ask "Which version is fixed?" --rebuild-index
 ```
 
+### Choose local models
+
+The pinned defaults provide the reproducible baseline, but each model command can run compatible
+Hugging Face models already on the user's system or download them on first use:
+
+```bash
+supplyguard ask "Which version fixes this vulnerability?" \
+  --language-model Qwen/Qwen2.5-1.5B-Instruct \
+  --embedding-model sentence-transformers/all-mpnet-base-v2 \
+  --device cpu
+```
+
+SupplyGuard accepts either Hugging Face model IDs or local model-directory paths. Custom language
+models must be compatible causal chat models, and custom embedding models must be compatible with
+Sentence Transformers. Models that require executing custom remote code are intentionally not
+supported. When a custom model is selected without a revision, SupplyGuard uses its `main` branch.
+For reproducible evaluations, pass immutable Hugging Face commit hashes with
+`--language-model-revision` and `--embedding-model-revision`.
+
+Changing the embedding model or revision selects a separate validated dense-index cache. Use
+`--rebuild-index` only when an explicit rebuild of that matching cache is desired.
+
 Runtime paths, pinned model revisions, retrieval thresholds, and generation limits are centralized in `src/supplyguard/config.py`. Invalid configuration, corpus, index, and model states produce concise CLI errors with non-zero exit codes instead of partial `None` results.
 
 ## Tests
