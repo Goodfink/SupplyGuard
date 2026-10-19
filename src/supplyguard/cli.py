@@ -71,6 +71,7 @@ def load_evaluation_set(evaluation_file=DEFAULT_CONFIG.paths.evaluation_file):
 def setup_system(
     corpus_path=DEFAULT_CONFIG.paths.corpus_path,
     config: SupplyGuardConfig = DEFAULT_CONFIG,
+    rebuild_index: bool = False,
 ):
     """Initialize retrieval and LLM systems."""
     from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
@@ -85,7 +86,12 @@ def setup_system(
     from supplyguard.retrieval.dense_retrieval import DenseRetriever
 
     dense = DenseRetriever(config.models)
-    dense.build_index(records)
+    dense.prepare_index(
+        records,
+        corpus_path=corpus_path,
+        cache_dir=config.paths.dense_index_dir,
+        force_rebuild=rebuild_index,
+    )
 
     print("\n3. Loading LLM (this takes 2-3 minutes on first run)...")
     from supplyguard.llm.llm_setup import HuggingFaceLLM
@@ -252,26 +258,29 @@ def build_parser():
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    def add_index_arguments(command_parser):
+        command_parser.add_argument(
+            "--corpus",
+            type=Path,
+            default=DEFAULT_CONFIG.paths.corpus_path,
+            help="Path to an advisory JSONL corpus",
+        )
+        command_parser.add_argument(
+            "--rebuild-index",
+            action="store_true",
+            help="Re-encode the corpus even when a valid dense index is cached",
+        )
+
     ask_parser = subparsers.add_parser(
         "ask", help="Ask one question using BM25 and dense retrieval."
     )
     ask_parser.add_argument("question", help="Security advisory question")
-    ask_parser.add_argument(
-        "--corpus",
-        type=Path,
-        default=DEFAULT_CONFIG.paths.corpus_path,
-        help="Path to an advisory JSONL corpus",
-    )
+    add_index_arguments(ask_parser)
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Run the complete BM25 and dense evaluation."
     )
-    evaluate_parser.add_argument(
-        "--corpus",
-        type=Path,
-        default=DEFAULT_CONFIG.paths.corpus_path,
-        help="Path to an advisory JSONL corpus",
-    )
+    add_index_arguments(evaluate_parser)
     evaluate_parser.add_argument(
         "--results-file",
         type=Path,
@@ -280,12 +289,7 @@ def build_parser():
     )
 
     demo_parser = subparsers.add_parser("demo", help="Start the interactive dense-retrieval demo.")
-    demo_parser.add_argument(
-        "--corpus",
-        type=Path,
-        default=DEFAULT_CONFIG.paths.corpus_path,
-        help="Path to an advisory JSONL corpus",
-    )
+    add_index_arguments(demo_parser)
 
     subparsers.add_parser("inspect-corpus", help="Inspect the configured raw OSV archives.")
     return parser
@@ -305,7 +309,7 @@ def main(argv=None):
             inspect_corpus()
             return 0
 
-        bm25, dense, llm, _ = setup_system(args.corpus)
+        bm25, dense, llm, _ = setup_system(args.corpus, rebuild_index=args.rebuild_index)
 
         if args.command == "ask":
             run_single_query(args.question, bm25, dense, llm)

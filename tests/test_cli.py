@@ -27,6 +27,16 @@ def test_ask_accepts_custom_corpus_path():
     assert args.corpus == Path("custom.jsonl")
 
 
+@pytest.mark.parametrize("command", ["ask", "evaluate", "demo"])
+def test_model_commands_accept_forced_index_rebuild(command):
+    arguments = [command]
+    if command == "ask":
+        arguments.append("question")
+    arguments.append("--rebuild-index")
+
+    assert build_parser().parse_args(arguments).rebuild_index is True
+
+
 def test_ask_uses_repository_corpus_by_default():
     args = build_parser().parse_args(["ask", "question"])
 
@@ -41,7 +51,13 @@ def test_main_without_command_prints_help_without_loading_models(capsys):
 def test_main_routes_ask_command(monkeypatch):
     systems = (object(), object(), object(), [])
     received = []
-    monkeypatch.setattr(cli, "setup_system", lambda corpus: systems)
+    setup_calls = []
+
+    def fake_setup(corpus, rebuild_index=False):
+        setup_calls.append((corpus, rebuild_index))
+        return systems
+
+    monkeypatch.setattr(cli, "setup_system", fake_setup)
     monkeypatch.setattr(
         cli,
         "run_single_query",
@@ -49,7 +65,22 @@ def test_main_routes_ask_command(monkeypatch):
     )
 
     assert main(["ask", "Which version is fixed?"]) == 0
+    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, False)]
     assert received == [("Which version is fixed?", *systems[:3])]
+
+
+def test_main_forwards_forced_index_rebuild(monkeypatch):
+    systems = (object(), object(), object(), [])
+    setup_calls = []
+    monkeypatch.setattr(
+        cli,
+        "setup_system",
+        lambda corpus, rebuild_index=False: setup_calls.append((corpus, rebuild_index)) or systems,
+    )
+    monkeypatch.setattr(cli, "run_single_query", lambda *_arguments: None)
+
+    assert main(["ask", "question", "--rebuild-index"]) == 0
+    assert setup_calls == [(DEFAULT_CONFIG.paths.corpus_path, True)]
 
 
 def test_evaluation_set_is_available_as_package_data():
@@ -75,7 +106,7 @@ def test_print_sources_displays_verified_advisory_link(capsys):
 
 
 def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
-    def fail_setup(_corpus):
+    def fail_setup(_corpus, rebuild_index=False):
         raise ModelLoadError("model cache is unavailable")
 
     monkeypatch.setattr(cli, "setup_system", fail_setup)

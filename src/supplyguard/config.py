@@ -22,6 +22,7 @@ class PathConfig:
     project_root: Path
     raw_data_dir: Path
     processed_data_dir: Path
+    dense_index_dir: Path
     corpus_path: Path
     evaluation_file: Path
     results_file: Path
@@ -35,6 +36,7 @@ class PathConfig:
             project_root=project_root,
             raw_data_dir=raw_data_dir,
             processed_data_dir=processed_data_dir,
+            dense_index_dir=project_root / "data" / "indexes" / "dense",
             corpus_path=processed_data_dir / "advisories.jsonl",
             evaluation_file=PACKAGE_ROOT / "evaluation" / "evaluation_set.json",
             results_file=project_root / "evaluation_results.json",

@@ -11,6 +11,7 @@ def test_path_config_derives_all_paths_from_project_root(tmp_path):
 
     assert paths.project_root == tmp_path.resolve()
     assert paths.raw_data_dir == tmp_path.resolve() / "data" / "raw"
+    assert paths.dense_index_dir == tmp_path.resolve() / "data" / "indexes" / "dense"
     assert paths.corpus_path == tmp_path.resolve() / "data" / "processed" / "advisories.jsonl"
     assert paths.results_file == tmp_path.resolve() / "evaluation_results.json"
     assert (
