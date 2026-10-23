@@ -146,6 +146,48 @@ def test_main_forwards_custom_model_configuration(monkeypatch):
     assert rebuild_index is False
 
 
+def test_evaluate_forwards_custom_models_to_report(monkeypatch, tmp_path):
+    systems = (object(), object(), object(), [])
+    evaluation_calls = []
+    monkeypatch.setattr(cli, "setup_system", lambda *_args, **_kwargs: systems)
+    monkeypatch.setattr(
+        cli,
+        "run_full_evaluation",
+        lambda *args, **kwargs: evaluation_calls.append((args, kwargs)),
+    )
+    results_path = tmp_path / "results.json"
+
+    assert (
+        main(
+            [
+                "evaluate",
+                "--results-file",
+                str(results_path),
+                "--language-model",
+                "organization/chat-model",
+                "--language-model-revision",
+                "chat-commit",
+                "--embedding-model",
+                "organization/embedding-model",
+                "--embedding-model-revision",
+                "embedding-commit",
+                "--device",
+                "cuda:0",
+            ]
+        )
+        == 0
+    )
+    positional, keyword = evaluation_calls[0]
+    assert positional == systems[:3]
+    assert keyword["results_file"] == results_path
+    assert keyword["corpus_path"] == DEFAULT_CONFIG.paths.corpus_path
+    assert keyword["config"].models.language_model_name == "organization/chat-model"
+    assert keyword["config"].models.language_model_revision == "chat-commit"
+    assert keyword["config"].models.embedding_model_name == "organization/embedding-model"
+    assert keyword["config"].models.embedding_model_revision == "embedding-commit"
+    assert keyword["config"].models.device == "cuda:0"
+
+
 def test_evaluation_set_is_available_as_package_data():
     questions = load_evaluation_set()
 

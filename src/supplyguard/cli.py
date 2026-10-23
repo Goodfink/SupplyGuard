@@ -143,18 +143,28 @@ def run_single_query(question, bm25, dense, llm):
     print_sources(dense_result["sources"])
 
 
-def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.results_file):
+def run_full_evaluation(
+    bm25,
+    dense,
+    llm,
+    results_file=DEFAULT_CONFIG.paths.results_file,
+    config: SupplyGuardConfig = DEFAULT_CONFIG,
+    corpus_path=DEFAULT_CONFIG.paths.corpus_path,
+):
     """Run evaluation on all test questions."""
     from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
+    from supplyguard.evaluation.reporting import (
+        build_evaluation_report,
+        index_question_results,
+        load_evaluation_report,
+        save_evaluation_report,
+    )
     from supplyguard.llm.answer_generation import generate_with_both_retrievers
 
     evaluation_set = load_evaluation_set()
     metrics = EvaluationMetrics()
-    if results_file.exists():
-        with results_file.open(encoding="utf-8") as file:
-            saved_results = {item["question_id"]: item for item in json.load(file)}
-    else:
-        saved_results = {}
+    existing_report = load_evaluation_report(results_file)
+    saved_results = index_question_results(existing_report)
 
     bm25_results = []
     dense_results = []
@@ -229,11 +239,25 @@ def run_full_evaluation(bm25, dense, llm, results_file=DEFAULT_CONFIG.paths.resu
         print(f"  BM25: {bm25_status} | Dense: {dense_status}")
 
     ordered_results = [saved_results[item["question_id"]] for item in evaluation_set]
-    with results_file.open("w", encoding="utf-8") as file:
-        json.dump(ordered_results, file, indent=2)
-
     bm25_stats = metrics.aggregate_results(bm25_results)
     dense_stats = metrics.aggregate_results(dense_results)
+    report_metrics = {
+        **existing_report["metrics"],
+        "bm25": bm25_stats,
+        "dense": dense_stats,
+        "comparison": {
+            "dense_minus_bm25_accuracy_points": (dense_stats["accuracy"] - bm25_stats["accuracy"])
+            * 100,
+        },
+    }
+    report = build_evaluation_report(
+        questions=ordered_results,
+        metrics=report_metrics,
+        config=config,
+        corpus_path=corpus_path,
+    )
+    save_evaluation_report(results_file, report)
+
     print_evaluation_summary("BM25 Results", bm25_stats)
     print_evaluation_summary("Dense Retrieval Results", dense_stats)
 
@@ -357,7 +381,14 @@ def main(argv=None):
         if args.command == "ask":
             run_single_query(args.question, bm25, dense, llm)
         elif args.command == "evaluate":
-            run_full_evaluation(bm25, dense, llm, results_file=args.results_file)
+            run_full_evaluation(
+                bm25,
+                dense,
+                llm,
+                results_file=args.results_file,
+                config=config,
+                corpus_path=args.corpus,
+            )
         elif args.command == "demo":
             interactive_demo(bm25, dense, llm)
         return 0
