@@ -12,7 +12,8 @@ SupplyGuard is a retrieval-augmented generation system for answering questions a
 - Dense retrieval: `sentence-transformers/all-MiniLM-L6-v2`
 - Local language model: `Qwen/Qwen2.5-0.5B-Instruct`
 - Sources: programmatically attached OSV links restricted to retrieved advisories
-- Evaluation: 10 factoid, 2 multi-hop, and 2 unanswerable questions
+- Evaluation: answer accuracy, citation quality, Recall@5, hit rate, MRR, and complete evidence
+- Evaluation set: 10 factoid, 2 multi-hop, and 2 unanswerable questions
 - Baseline: the 10 factoid questions answered without retrieval
 
 The tracked corpus is stored in `data/processed/advisories.jsonl`. The evaluation set is stored in `src/supplyguard/evaluation/evaluation_set.json`.
@@ -93,6 +94,13 @@ set. Existing legacy result lists are migrated automatically on the next experim
 
 Random seeds, dependency versions, model revisions, CPU execution, and deterministic generation are
 fixed for reproducibility.
+
+The evaluation reports document-level retrieval quality separately from generated-answer quality.
+Recall@5 measures how much required evidence was retrieved, hit rate measures whether any required
+advisory was found, and MRR rewards placing the first relevant advisory near the top. Complete
+evidence requires every relevant advisory, which makes multi-hop misses visible. Unanswerable
+questions are excluded from relevance metrics and instead report how often retrieval correctly
+returns no result.
 
 ## Demo
 

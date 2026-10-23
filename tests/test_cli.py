@@ -210,6 +210,39 @@ def test_print_sources_displays_verified_advisory_link(capsys):
     assert "https://osv.dev/vulnerability/GHSA-abcd-1234-5678" in output
 
 
+def test_print_evaluation_summary_includes_retrieval_quality(capsys):
+    stats = {
+        "accuracy": 0.5,
+        "correct_answers": 2,
+        "total_questions": 4,
+        "idontknow_accuracy": 1.0,
+        "citation_accuracy": 0.75,
+        "citation_grounding_accuracy": 1.0,
+        "breakdown": {
+            "factoid": {"accuracy": 0.5, "correct": 1, "count": 2},
+            "multi_hop": {"accuracy": 0.0, "correct": 0, "count": 1},
+            "unanswerable": {"accuracy": 1.0, "correct": 1, "count": 1},
+        },
+        "retrieval": {
+            "top_k": 5,
+            "recall_at_k": 0.75,
+            "hit_rate_at_k": 1.0,
+            "mrr_at_k": 0.625,
+            "complete_recall_rate_at_k": 0.5,
+            "unanswerable_empty_result_rate": 1.0,
+        },
+    }
+
+    cli.print_evaluation_summary("BM25 Results", stats)
+
+    output = capsys.readouterr().out
+    assert "Retrieval Recall@5: 75.0%" in output
+    assert "Retrieval Hit Rate@5: 100.0%" in output
+    assert "Retrieval MRR@5: 0.625" in output
+    assert "Complete Evidence@5: 50.0%" in output
+    assert "Unanswerable Empty-Result Rate: 100.0%" in output
+
+
 def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
     def fail_setup(_corpus, config=DEFAULT_CONFIG, rebuild_index=False):
         raise ModelLoadError("model cache is unavailable")

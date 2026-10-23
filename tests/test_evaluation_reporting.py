@@ -209,6 +209,8 @@ def test_full_evaluation_preserves_baseline_and_writes_aggregate_report(tmp_path
     assert report["metrics"]["no_retrieval"]["accuracy"] == 0.0
     assert report["metrics"]["bm25"]["accuracy"] == 1.0
     assert report["metrics"]["dense"]["accuracy"] == 1.0
+    assert report["metrics"]["bm25"]["retrieval"]["recall_at_k"] == 1.0
+    assert report["metrics"]["dense"]["retrieval"]["mrr_at_k"] == 1.0
     assert report["metrics"]["comparison"]["dense_minus_bm25_accuracy_points"] == 0.0
     assert report["run"]["models"]["language_model_name"] == "organization/chat-model"
     assert report["run"]["models"]["language_model_revision"] == "chat-commit"
@@ -216,3 +218,4 @@ def test_full_evaluation_preserves_baseline_and_writes_aggregate_report(tmp_path
     assert report["run"]["models"]["embedding_model_revision"] == "embedding-commit"
     assert report["run"]["models"]["device"] == "cuda:0"
     assert report["questions"][0]["bm25"]["sources"][0]["advisory_id"] == "GHSA-one"
+    assert report["questions"][0]["bm25"]["retrieval_metrics"]["complete_recall"] is True
