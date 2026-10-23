@@ -93,7 +93,14 @@ def test_corpus_change_invalidates_cached_index(tmp_path, records):
     assert second_model.document_encode_calls == 1
 
 
-def test_model_revision_change_invalidates_cached_index(tmp_path, records):
+@pytest.mark.parametrize(
+    ("config_field", "changed_value"),
+    [
+        ("embedding_model_name", "organization/different-model"),
+        ("embedding_model_revision", "different-revision"),
+    ],
+)
+def test_model_change_invalidates_cached_index(tmp_path, records, config_field, changed_value):
     corpus_path = tmp_path / "advisories.jsonl"
     cache_dir = tmp_path / "indexes"
     write_corpus(corpus_path, records)
@@ -101,7 +108,7 @@ def test_model_revision_change_invalidates_cached_index(tmp_path, records):
     first, _ = make_retriever(config)
     first.prepare_index(records, corpus_path=corpus_path, cache_dir=cache_dir)
 
-    changed_config = replace(config, embedding_model_revision="different-revision")
+    changed_config = replace(config, **{config_field: changed_value})
     second, second_model = make_retriever(changed_config)
 
     assert second.prepare_index(records, corpus_path=corpus_path, cache_dir=cache_dir) is False
