@@ -6,6 +6,12 @@ from supplyguard.config import DEFAULT_CONFIG
 def main():
     """Run the no-retrieval factoid baseline."""
     from supplyguard.evaluation.evaluation_metrics import EvaluationMetrics
+    from supplyguard.evaluation.reporting import (
+        build_evaluation_report,
+        index_question_results,
+        load_evaluation_report,
+        save_evaluation_report,
+    )
     from supplyguard.llm.llm_setup import HuggingFaceLLM
 
     with DEFAULT_CONFIG.paths.evaluation_file.open(encoding="utf-8") as file:
@@ -15,11 +21,9 @@ def main():
     llm = HuggingFaceLLM(DEFAULT_CONFIG.models)
     metrics = EvaluationMetrics()
 
-    if DEFAULT_CONFIG.paths.results_file.exists():
-        with DEFAULT_CONFIG.paths.results_file.open(encoding="utf-8") as file:
-            saved_results = {item["question_id"]: item for item in json.load(file)}
-    else:
-        saved_results = {}
+    existing_report = load_evaluation_report(DEFAULT_CONFIG.paths.results_file)
+    saved_results = index_question_results(existing_report)
+    baseline_evaluations = []
 
     for index, question_item in enumerate(diagnostic_items, 1):
         question = question_item["question"]
@@ -44,6 +48,7 @@ Answer:"""
             question_item.get("forbidden_answer_terms"),
             require_citations=False,
         )
+        baseline_evaluations.append(evaluation)
         saved_result = saved_results.get(question_item["question_id"], {})
         manual_correct = saved_result.get("no_retrieval", {}).get("manual_correct")
         saved_result.update(
@@ -67,8 +72,17 @@ Answer:"""
         for item in evaluation_set
         if item["question_id"] in saved_results
     ]
-    with DEFAULT_CONFIG.paths.results_file.open("w", encoding="utf-8") as file:
-        json.dump(results, file, indent=2)
+    report_metrics = {
+        **existing_report["metrics"],
+        "no_retrieval": metrics.aggregate_results(baseline_evaluations),
+    }
+    report = build_evaluation_report(
+        questions=results,
+        metrics=report_metrics,
+        config=DEFAULT_CONFIG,
+        corpus_path=DEFAULT_CONFIG.paths.corpus_path,
+    )
+    save_evaluation_report(DEFAULT_CONFIG.paths.results_file, report)
 
     automatic_correct = sum(
         saved_results[item["question_id"]]["no_retrieval"]["correct"] for item in diagnostic_items

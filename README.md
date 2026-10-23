@@ -86,7 +86,13 @@ Run all no-retrieval, BM25, and dense experiments with one command:
 supplyguard-experiments
 ```
 
-Results are written to `evaluation_results.json`. Random seeds, dependency versions, model revisions, CPU execution, and deterministic generation are fixed for reproducibility.
+Results are written atomically to a versioned `evaluation_results.json` report. The report contains
+aggregate metrics and per-question evidence together with model revisions, retrieval settings,
+runtime settings, Python/platform details, and SHA-256 fingerprints for the corpus and evaluation
+set. Existing legacy result lists are migrated automatically on the next experiment run.
+
+Random seeds, dependency versions, model revisions, CPU execution, and deterministic generation are
+fixed for reproducibility.
 
 ## Demo
 
