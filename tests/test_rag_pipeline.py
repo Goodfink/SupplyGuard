@@ -2,7 +2,7 @@ import pytest
 
 from supplyguard.config import DEFAULT_CONFIG, RetrievalConfig, SupplyGuardConfig
 from supplyguard.errors import ConfigurationError, ModelGenerationError
-from supplyguard.llm.answer_generation import RAGPipeline
+from supplyguard.llm.answer_generation import RAGPipeline, generate_with_all_retrievers
 
 
 class FakeRetriever:
@@ -159,6 +159,20 @@ def test_unknown_retrieval_method_fails_fast():
 
     with pytest.raises(ConfigurationError, match="Choose bm25, dense, or hybrid"):
         pipeline.generate_answer("question", retrieval_method="unsupported")
+
+
+def test_generate_with_all_retrievers_returns_comparable_results(advisory_record_factory):
+    record = advisory_record_factory()
+    bm25 = FakeRetriever([retrieval_result(record, score=20.0)])
+    dense = FakeRetriever([retrieval_result(record, score=0.8)])
+
+    results = generate_with_all_retrievers("What is the fix?", bm25, dense, FakeLLM())
+
+    assert set(results) == {"question", "bm25", "dense", "hybrid"}
+    assert results["bm25"]["retrieval_method"] == "bm25"
+    assert results["dense"]["retrieval_method"] == "dense"
+    assert results["hybrid"]["retrieval_method"] == "hybrid"
+    assert results["hybrid"]["retrieved_chunks"][0]["document_id"] == record["document_id"]
 
 
 def test_model_cannot_cite_an_advisory_that_was_not_retrieved(advisory_record_factory):
