@@ -3,13 +3,14 @@
 [![Quality](https://github.com/Goodfink/SupplyGuard/actions/workflows/quality.yml/badge.svg)](https://github.com/Goodfink/SupplyGuard/actions/workflows/quality.yml)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
 
-SupplyGuard is a retrieval-augmented generation system for answering questions about open-source software security advisories. It compares BM25 and dense semantic retrieval using the same corpus, local language model, prompt, generation settings, and evaluation set.
+SupplyGuard is a retrieval-augmented generation system for answering questions about open-source software security advisories. It supports BM25, dense semantic retrieval, and hybrid rank fusion over the same local advisory corpus.
 
 ## System
 
 - Corpus: 1,000 advisories from the [OSV database](https://osv.dev/)
 - Classical retrieval: BM25
 - Dense retrieval: `sentence-transformers/all-MiniLM-L6-v2`
+- Hybrid retrieval: Reciprocal Rank Fusion over filtered BM25 and dense results
 - Local language model: `Qwen/Qwen2.5-0.5B-Instruct`
 - Sources: programmatically attached OSV links restricted to retrieved advisories
 - Evaluation: answer accuracy, citation quality, Recall@5, hit rate, MRR, and complete evidence
@@ -104,7 +105,7 @@ returns no result.
 
 ## Demo
 
-Ask one question using both retrievers:
+Ask one question using BM25, dense, and hybrid retrieval:
 
 ```bash
 supplyguard ask "Which version fixes the vulnerability in github.com/dhowden/tag?"

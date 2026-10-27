@@ -31,6 +31,7 @@ def test_path_config_derives_all_paths_from_project_root(tmp_path):
     "factory",
     [
         lambda: RetrievalConfig(top_k=0),
+        lambda: RetrievalConfig(rrf_k=0),
         lambda: RetrievalConfig(dense_relative_cutoff=1.1),
         lambda: ModelConfig(answer_max_tokens=0),
         lambda: ModelConfig(language_model_name=""),

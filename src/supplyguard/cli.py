@@ -131,34 +131,39 @@ def setup_system(
 
 
 def run_single_query(question, bm25, dense, llm):
-    """Run a single query with both retrievers."""
+    """Run a single query with lexical, semantic, and hybrid retrieval."""
     from supplyguard.llm.answer_generation import RAGPipeline
 
     print(f"\nQuestion: {question}\n")
     pipeline = RAGPipeline(bm25, dense, llm)
 
-    print("BM25 Results:")
-    bm25_result = pipeline.generate_answer(question, use_dense=False)
-    if bm25_result["retrieved_chunks"]:
-        print(f"  Top chunk: {bm25_result['retrieved_chunks'][0]['document_id']}")
-        print(f"  Score: {bm25_result['retrieved_chunks'][0]['score']:.4f}")
-    else:
-        print("  No matching advisory found")
+    results = {
+        retrieval_method: pipeline.generate_answer(
+            question,
+            retrieval_method=retrieval_method,
+        )
+        for retrieval_method in ("bm25", "dense", "hybrid")
+    }
+    labels = {
+        "bm25": "BM25",
+        "dense": "Dense Retrieval",
+        "hybrid": "Hybrid Retrieval (RRF)",
+    }
 
-    print("\nDense Retrieval Results:")
-    dense_result = pipeline.generate_answer(question, use_dense=True)
-    if dense_result["retrieved_chunks"]:
-        print(f"  Top chunk: {dense_result['retrieved_chunks'][0]['document_id']}")
-        print(f"  Score: {dense_result['retrieved_chunks'][0]['score']:.4f}")
-    else:
-        print("  No matching advisory found")
+    for retrieval_method, result in results.items():
+        print(f"{labels[retrieval_method]} Results:")
+        if result["retrieved_chunks"]:
+            print(f"  Top chunk: {result['retrieved_chunks'][0]['document_id']}")
+            print(f"  Score: {result['retrieved_chunks'][0]['score']:.4f}")
+        else:
+            print("  No matching advisory found")
+        print()
 
-    print("\nBM25 Answer:")
-    print(f"  {bm25_result['answer']}")
-    print_sources(bm25_result["sources"])
-    print("\nDense Answer:")
-    print(f"  {dense_result['answer']}")
-    print_sources(dense_result["sources"])
+    for retrieval_method, result in results.items():
+        print(f"{labels[retrieval_method]} Answer:")
+        print(f"  {result['answer']}")
+        print_sources(result["sources"])
+        print()
 
 
 def run_full_evaluation(

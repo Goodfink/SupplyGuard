@@ -101,6 +101,7 @@ def test_report_captures_runtime_and_dataset_provenance(tmp_path):
     assert report["run"]["retrieval"] == {
         "top_k": 5,
         "max_contexts": 3,
+        "rrf_k": 60,
         "bm25_min_score": 10.0,
         "dense_min_score": 0.44,
         "bm25_relative_cutoff": 0.65,

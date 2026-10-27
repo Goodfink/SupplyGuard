@@ -1,7 +1,7 @@
 import pytest
 
 from supplyguard.config import DEFAULT_CONFIG, RetrievalConfig, SupplyGuardConfig
-from supplyguard.errors import ModelGenerationError
+from supplyguard.errors import ConfigurationError, ModelGenerationError
 from supplyguard.llm.answer_generation import RAGPipeline
 
 
@@ -119,6 +119,46 @@ def test_filter_retrieved_applies_relative_cutoff_and_context_limit(
     filtered = pipeline.filter_retrieved("general question", results, use_dense=False)
 
     assert [item["score"] for item in filtered] == [20.0, 15.0]
+
+
+def test_hybrid_retrieval_fuses_filtered_bm25_and_dense_results(advisory_record_factory):
+    shared = advisory_record_factory(document_id="GHSA-shared-0000-0001")
+    lexical = advisory_record_factory(document_id="GHSA-lexical-0000-0002")
+    semantic = advisory_record_factory(document_id="GHSA-semantic-0000-0003")
+    bm25 = FakeRetriever(
+        [
+            retrieval_result(lexical, score=20.0, rank=1),
+            retrieval_result(shared, score=15.0, rank=2),
+        ]
+    )
+    dense = FakeRetriever(
+        [
+            retrieval_result(semantic, score=0.9, rank=1),
+            retrieval_result(shared, score=0.8, rank=2),
+        ]
+    )
+    config = SupplyGuardConfig(
+        paths=DEFAULT_CONFIG.paths,
+        models=DEFAULT_CONFIG.models,
+        retrieval=RetrievalConfig(max_contexts=1),
+        runtime=DEFAULT_CONFIG.runtime,
+    )
+    pipeline = RAGPipeline(bm25, dense, llm=FakeLLM(), config=config)
+
+    result = pipeline.generate_answer("What is the fix?", retrieval_method="hybrid")
+
+    assert result["retrieval_method"] == "hybrid"
+    assert [item["document_id"] for item in result["retrieved_chunks"]] == ["GHSA-shared-0000-0001"]
+    assert result["retrieved_chunks"][0]["retriever_ranks"] == {"bm25": 2, "dense": 2}
+    assert bm25.queries == [("What is the fix?", 5)]
+    assert dense.queries == [("What is the fix?", 5)]
+
+
+def test_unknown_retrieval_method_fails_fast():
+    pipeline = RAGPipeline(FakeRetriever([]), FakeRetriever([]), llm=FakeLLM())
+
+    with pytest.raises(ConfigurationError, match="Choose bm25, dense, or hybrid"):
+        pipeline.generate_answer("question", retrieval_method="unsupported")
 
 
 def test_model_cannot_cite_an_advisory_that_was_not_retrieved(advisory_record_factory):

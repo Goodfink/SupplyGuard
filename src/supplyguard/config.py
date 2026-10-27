@@ -86,6 +86,7 @@ class RetrievalConfig:
 
     top_k: int = 5
     max_contexts: int = 3
+    rrf_k: int = 60
     bm25_min_score: float = 10.0
     dense_min_score: float = 0.44
     bm25_relative_cutoff: float = 0.65
@@ -96,6 +97,8 @@ class RetrievalConfig:
             raise ConfigurationError("top_k must be greater than 0")
         if self.max_contexts <= 0:
             raise ConfigurationError("max_contexts must be greater than 0")
+        if self.rrf_k <= 0:
+            raise ConfigurationError("rrf_k must be greater than 0")
         if self.bm25_min_score < 0 or self.dense_min_score < 0:
             raise ConfigurationError("retrieval score thresholds must not be negative")
         for name, value in (
