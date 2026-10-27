@@ -1,8 +1,9 @@
 import re
 
 from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
-from supplyguard.errors import ModelGenerationError
+from supplyguard.errors import ConfigurationError, ModelGenerationError
 from supplyguard.llm.prompt_template import create_rag_prompt
+from supplyguard.retrieval.hybrid import reciprocal_rank_fusion
 from supplyguard.sources import build_advisory_sources, is_abstention, remove_inline_citations
 
 
@@ -24,7 +25,7 @@ class RAGPipeline:
             llm = HuggingFaceLLM(config.models)
         self.llm = llm
 
-    def filter_retrieved(self, question, retrieved, use_dense):
+    def filter_retrieved(self, question, retrieved, use_dense, result_limit=None):
         if not retrieved:
             return []
 
@@ -59,23 +60,61 @@ class RAGPipeline:
         )
         top_score = retrieved[0]["score"]
         score_cutoff = max(minimum_score, top_score * relative_cutoff)
-        return [result for result in retrieved if result["score"] >= score_cutoff][
-            : retrieval_config.max_contexts
-        ]
+        if result_limit is None:
+            result_limit = retrieval_config.max_contexts
+        return [result for result in retrieved if result["score"] >= score_cutoff][:result_limit]
 
-    def generate_answer(self, question, use_dense=True, top_k=None):
+    def retrieve(self, question, retrieval_method, top_k):
+        """Retrieve and filter context with one strategy or rank fusion."""
+        if retrieval_method == "bm25":
+            retrieved = self.bm25_retriever.search(question, top_k=top_k)
+            return self.filter_retrieved(question, retrieved, use_dense=False)
+
+        if retrieval_method == "dense":
+            retrieved = self.dense_retriever.search(question, top_k=top_k)
+            return self.filter_retrieved(question, retrieved, use_dense=True)
+
+        if retrieval_method == "hybrid":
+            bm25_results = self.bm25_retriever.search(question, top_k=top_k)
+            dense_results = self.dense_retriever.search(question, top_k=top_k)
+            filtered_bm25 = self.filter_retrieved(
+                question,
+                bm25_results,
+                use_dense=False,
+                result_limit=top_k,
+            )
+            filtered_dense = self.filter_retrieved(
+                question,
+                dense_results,
+                use_dense=True,
+                result_limit=top_k,
+            )
+            return reciprocal_rank_fusion(
+                filtered_bm25,
+                filtered_dense,
+                top_k=self.config.retrieval.max_contexts,
+                rrf_k=self.config.retrieval.rrf_k,
+            )
+
+        raise ConfigurationError(
+            f"Unknown retrieval method '{retrieval_method}'. Choose bm25, dense, or hybrid"
+        )
+
+    def generate_answer(
+        self,
+        question,
+        use_dense=None,
+        top_k=None,
+        *,
+        retrieval_method=None,
+    ):
         """Generate answer using retrieved context"""
         if top_k is None:
             top_k = self.config.retrieval.top_k
 
-        if use_dense:
-            retrieved = self.dense_retriever.search(question, top_k=top_k)
-            retrieval_method = "dense"
-        else:
-            retrieved = self.bm25_retriever.search(question, top_k=top_k)
-            retrieval_method = "bm25"
-
-        retrieved = self.filter_retrieved(question, retrieved, use_dense)
+        if retrieval_method is None:
+            retrieval_method = "bm25" if use_dense is False else "dense"
+        retrieved = self.retrieve(question, retrieval_method, top_k)
 
         retrieved_chunks = [r["record"] for r in retrieved]
 
