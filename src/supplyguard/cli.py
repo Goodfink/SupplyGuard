@@ -45,6 +45,24 @@ def print_evaluation_summary(label, stats):
         "  Citation Grounding (citations present in context): "
         f"{format_optional_percentage(stats['citation_grounding_accuracy'])}"
     )
+    retrieval = stats.get("retrieval")
+    if retrieval:
+        top_k = retrieval["top_k"]
+        print(f"  Retrieval Recall@{top_k}: {format_optional_percentage(retrieval['recall_at_k'])}")
+        print(
+            f"  Retrieval Hit Rate@{top_k}: "
+            f"{format_optional_percentage(retrieval['hit_rate_at_k'])}"
+        )
+        mrr = retrieval["mrr_at_k"]
+        print(f"  Retrieval MRR@{top_k}: {'N/A' if mrr is None else f'{mrr:.3f}'}")
+        print(
+            f"  Complete Evidence@{top_k}: "
+            f"{format_optional_percentage(retrieval['complete_recall_rate_at_k'])}"
+        )
+        print(
+            "  Unanswerable Empty-Result Rate: "
+            f"{format_optional_percentage(retrieval['unanswerable_empty_result_rate'])}"
+        )
 
 
 def print_sources(sources):
@@ -159,6 +177,10 @@ def run_full_evaluation(
         load_evaluation_report,
         save_evaluation_report,
     )
+    from supplyguard.evaluation.retrieval_metrics import (
+        aggregate_retrieval_results,
+        evaluate_retrieval,
+    )
     from supplyguard.llm.answer_generation import generate_with_both_retrievers
 
     evaluation_set = load_evaluation_set()
@@ -168,6 +190,8 @@ def run_full_evaluation(
 
     bm25_results = []
     dense_results = []
+    bm25_retrieval_results = []
+    dense_retrieval_results = []
     for index, question_item in enumerate(evaluation_set, 1):
         print(f"\n[{index}/{len(evaluation_set)}] {question_item['question'][:60]}...")
         result = generate_with_both_retrievers(question_item["question"], bm25, dense, llm)
@@ -184,6 +208,16 @@ def run_full_evaluation(
             str(item["record"].get("advisory_id") or item["document_id"])
             for item in result["dense"]["retrieved_chunks"]
         ]
+        bm25_retrieval_eval = evaluate_retrieval(
+            bm25_context_advisory_ids,
+            question_item["ground_truth_chunk_ids"],
+            question_item["question_type"],
+        )
+        dense_retrieval_eval = evaluate_retrieval(
+            dense_context_advisory_ids,
+            question_item["ground_truth_chunk_ids"],
+            question_item["question_type"],
+        )
 
         bm25_eval = metrics.evaluate_answer(
             result["bm25"]["answer"],
@@ -207,6 +241,8 @@ def run_full_evaluation(
         )
         bm25_results.append(bm25_eval)
         dense_results.append(dense_eval)
+        bm25_retrieval_results.append(bm25_retrieval_eval)
+        dense_retrieval_results.append(dense_retrieval_eval)
 
         saved_result = saved_results.get(question_item["question_id"], {})
         saved_result.update(
@@ -221,6 +257,7 @@ def run_full_evaluation(
                     "citations_grounded": bm25_eval["citations_grounded"],
                     "sources": result["bm25"]["sources"],
                     "retrieved_document_ids": bm25_retrieved_ids,
+                    "retrieval_metrics": bm25_retrieval_eval,
                 },
                 "dense": {
                     "answer": result["dense"]["answer"],
@@ -229,6 +266,7 @@ def run_full_evaluation(
                     "citations_grounded": dense_eval["citations_grounded"],
                     "sources": result["dense"]["sources"],
                     "retrieved_document_ids": dense_retrieved_ids,
+                    "retrieval_metrics": dense_retrieval_eval,
                 },
             }
         )
@@ -241,6 +279,14 @@ def run_full_evaluation(
     ordered_results = [saved_results[item["question_id"]] for item in evaluation_set]
     bm25_stats = metrics.aggregate_results(bm25_results)
     dense_stats = metrics.aggregate_results(dense_results)
+    bm25_stats["retrieval"] = aggregate_retrieval_results(
+        bm25_retrieval_results,
+        top_k=config.retrieval.top_k,
+    )
+    dense_stats["retrieval"] = aggregate_retrieval_results(
+        dense_retrieval_results,
+        top_k=config.retrieval.top_k,
+    )
     report_metrics = {
         **existing_report["metrics"],
         "bm25": bm25_stats,
