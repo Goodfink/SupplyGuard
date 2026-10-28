@@ -64,6 +64,19 @@ Changing the embedding model or revision selects a separate validated dense-inde
 
 Runtime paths, pinned model revisions, retrieval thresholds, and generation limits are centralized in `src/supplyguard/config.py`. Invalid configuration, corpus, index, and model states produce concise CLI errors with non-zero exit codes instead of partial `None` results.
 
+### RAG security boundaries
+
+SupplyGuard validates and bounds questions before loading models or querying an index. Retrieved
+advisories are serialized as size-limited JSON data, while the grounding policy is sent separately
+in the model's system role. The question precedes evidence so tokenizer truncation preserves the
+user's request, and each selected advisory receives part of the context budget. Advisory text is
+explicitly treated as untrusted data; source links are constructed from retrieved records rather
+than accepted from model output.
+
+These controls reduce prompt-injection exposure but do not claim that a language model is immune to
+all adversarial text. Applications using generated answers for automated decisions should apply
+additional review and policy controls.
+
 ## Tests
 
 Run the offline unit test suite without downloading either model:
@@ -136,4 +149,5 @@ Retrieval substantially improves factoid accuracy over the no-retrieval baseline
 
 - The 0.5B model sometimes extracts the wrong fact from correctly retrieved evidence.
 - Sources identify the retrieved evidence supplied to the model, but they do not yet provide claim-level faithfulness guarantees.
+- Prompt isolation and bounded context reduce injection risk but cannot guarantee model behavior.
 - Dense retrieval misses one required advisory on a multi-hop question.

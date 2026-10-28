@@ -6,6 +6,7 @@ from typing import Any
 
 from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig, with_model_overrides
 from supplyguard.errors import ConfigurationError, SupplyGuardError
+from supplyguard.llm.input_validation import validate_question
 
 RETRIEVAL_LABELS = {
     "bm25": "BM25",
@@ -408,6 +409,11 @@ def main(argv=None):
             embedding_model_revision=args.embedding_model_revision,
             device=args.device,
         )
+        if args.command == "ask":
+            args.question = validate_question(
+                args.question,
+                max_chars=config.models.question_max_chars,
+            )
         bm25, dense, llm, _ = setup_system(
             args.corpus,
             config=config,

@@ -13,6 +13,12 @@ class ConfigurationError(SupplyGuardError):
     exit_code = 2
 
 
+class InputValidationError(SupplyGuardError):
+    """Raised when a user-controlled question violates an input boundary."""
+
+    exit_code = 2
+
+
 class CorpusError(SupplyGuardError):
     """Raised when advisory data cannot be read or validated."""
 

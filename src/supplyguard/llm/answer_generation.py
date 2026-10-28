@@ -2,7 +2,8 @@ import re
 
 from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig
 from supplyguard.errors import ConfigurationError, ModelGenerationError
-from supplyguard.llm.prompt_template import create_rag_prompt
+from supplyguard.llm.input_validation import validate_question
+from supplyguard.llm.prompt_template import RAG_SYSTEM_PROMPT, create_rag_prompt
 from supplyguard.retrieval.hybrid import reciprocal_rank_fusion
 from supplyguard.sources import build_advisory_sources, is_abstention, remove_inline_citations
 
@@ -111,6 +112,10 @@ class RAGPipeline:
         retrieval_method=None,
     ):
         """Generate answer using retrieved context"""
+        question = validate_question(
+            question,
+            max_chars=self.config.models.question_max_chars,
+        )
         if top_k is None:
             top_k = self.config.retrieval.top_k
 
@@ -121,10 +126,15 @@ class RAGPipeline:
         retrieved_chunks = [r["record"] for r in retrieved]
 
         if retrieved_chunks:
-            prompt = create_rag_prompt(question, retrieved_chunks)
+            prompt = create_rag_prompt(
+                question,
+                retrieved_chunks,
+                max_context_chars=self.config.models.context_max_chars,
+            )
             model_answer = self.llm.generate(
                 prompt,
                 max_tokens=self.config.models.answer_max_tokens,
+                system_prompt=RAG_SYSTEM_PROMPT,
             )
             answer = remove_inline_citations(model_answer)
             if not answer:

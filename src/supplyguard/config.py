@@ -56,6 +56,8 @@ class ModelConfig:
     answer_max_tokens: int = 300
     baseline_max_tokens: int = 80
     embedding_batch_size: int = 32
+    question_max_chars: int = 2_000
+    context_max_chars: int = 48_000
 
     def __post_init__(self) -> None:
         text_values: dict[str, str] = {
@@ -74,6 +76,8 @@ class ModelConfig:
             "answer_max_tokens": self.answer_max_tokens,
             "baseline_max_tokens": self.baseline_max_tokens,
             "embedding_batch_size": self.embedding_batch_size,
+            "question_max_chars": self.question_max_chars,
+            "context_max_chars": self.context_max_chars,
         }
         for numeric_name, numeric_value in positive_values.items():
             if numeric_value <= 0:
