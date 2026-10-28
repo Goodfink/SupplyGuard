@@ -2,9 +2,16 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from supplyguard.config import DEFAULT_CONFIG, SupplyGuardConfig, with_model_overrides
 from supplyguard.errors import ConfigurationError, SupplyGuardError
+
+RETRIEVAL_LABELS = {
+    "bm25": "BM25",
+    "dense": "Dense Retrieval",
+    "hybrid": "Hybrid Retrieval (RRF)",
+}
 
 
 def format_optional_percentage(value):
@@ -132,7 +139,7 @@ def setup_system(
 
 def run_single_query(question, bm25, dense, llm):
     """Run a single query with lexical, semantic, and hybrid retrieval."""
-    from supplyguard.llm.answer_generation import RAGPipeline
+    from supplyguard.llm.answer_generation import RETRIEVAL_METHODS, RAGPipeline
 
     print(f"\nQuestion: {question}\n")
     pipeline = RAGPipeline(bm25, dense, llm)
@@ -142,16 +149,11 @@ def run_single_query(question, bm25, dense, llm):
             question,
             retrieval_method=retrieval_method,
         )
-        for retrieval_method in ("bm25", "dense", "hybrid")
-    }
-    labels = {
-        "bm25": "BM25",
-        "dense": "Dense Retrieval",
-        "hybrid": "Hybrid Retrieval (RRF)",
+        for retrieval_method in RETRIEVAL_METHODS
     }
 
     for retrieval_method, result in results.items():
-        print(f"{labels[retrieval_method]} Results:")
+        print(f"{RETRIEVAL_LABELS[retrieval_method]} Results:")
         if result["retrieved_chunks"]:
             print(f"  Top chunk: {result['retrieved_chunks'][0]['document_id']}")
             print(f"  Score: {result['retrieved_chunks'][0]['score']:.4f}")
@@ -160,7 +162,7 @@ def run_single_query(question, bm25, dense, llm):
         print()
 
     for retrieval_method, result in results.items():
-        print(f"{labels[retrieval_method]} Answer:")
+        print(f"{RETRIEVAL_LABELS[retrieval_method]} Answer:")
         print(f"  {result['answer']}")
         print_sources(result["sources"])
         print()
@@ -186,68 +188,64 @@ def run_full_evaluation(
         aggregate_retrieval_results,
         evaluate_retrieval,
     )
-    from supplyguard.llm.answer_generation import generate_with_both_retrievers
+    from supplyguard.llm.answer_generation import (
+        RETRIEVAL_METHODS,
+        generate_with_all_retrievers,
+    )
 
     evaluation_set = load_evaluation_set()
     metrics = EvaluationMetrics()
     existing_report = load_evaluation_report(results_file)
     saved_results = index_question_results(existing_report)
 
-    bm25_results = []
-    dense_results = []
-    bm25_retrieval_results = []
-    dense_retrieval_results = []
+    answer_results: dict[str, list[dict[str, Any]]] = {
+        retrieval_method: [] for retrieval_method in RETRIEVAL_METHODS
+    }
+    retrieval_results: dict[str, list[dict[str, Any]]] = {
+        retrieval_method: [] for retrieval_method in RETRIEVAL_METHODS
+    }
     for index, question_item in enumerate(evaluation_set, 1):
         print(f"\n[{index}/{len(evaluation_set)}] {question_item['question'][:60]}...")
-        result = generate_with_both_retrievers(question_item["question"], bm25, dense, llm)
+        result = generate_with_all_retrievers(question_item["question"], bm25, dense, llm)
+        saved_system_results = {}
+        statuses = []
 
-        bm25_cited_ids = [source["advisory_id"] for source in result["bm25"]["sources"]]
-        dense_cited_ids = [source["advisory_id"] for source in result["dense"]["sources"]]
-        bm25_retrieved_ids = [item["document_id"] for item in result["bm25"]["retrieved_chunks"]]
-        dense_retrieved_ids = [item["document_id"] for item in result["dense"]["retrieved_chunks"]]
-        bm25_context_advisory_ids = [
-            str(item["record"].get("advisory_id") or item["document_id"])
-            for item in result["bm25"]["retrieved_chunks"]
-        ]
-        dense_context_advisory_ids = [
-            str(item["record"].get("advisory_id") or item["document_id"])
-            for item in result["dense"]["retrieved_chunks"]
-        ]
-        bm25_retrieval_eval = evaluate_retrieval(
-            bm25_context_advisory_ids,
-            question_item["ground_truth_chunk_ids"],
-            question_item["question_type"],
-        )
-        dense_retrieval_eval = evaluate_retrieval(
-            dense_context_advisory_ids,
-            question_item["ground_truth_chunk_ids"],
-            question_item["question_type"],
-        )
-
-        bm25_eval = metrics.evaluate_answer(
-            result["bm25"]["answer"],
-            question_item["ground_truth_answer"],
-            question_item["question_type"],
-            question_item["ground_truth_chunk_ids"],
-            question_item.get("required_answer_terms"),
-            question_item.get("forbidden_answer_terms"),
-            cited_ids=bm25_cited_ids,
-            retrieved_document_ids=bm25_context_advisory_ids,
-        )
-        dense_eval = metrics.evaluate_answer(
-            result["dense"]["answer"],
-            question_item["ground_truth_answer"],
-            question_item["question_type"],
-            question_item["ground_truth_chunk_ids"],
-            question_item.get("required_answer_terms"),
-            question_item.get("forbidden_answer_terms"),
-            cited_ids=dense_cited_ids,
-            retrieved_document_ids=dense_context_advisory_ids,
-        )
-        bm25_results.append(bm25_eval)
-        dense_results.append(dense_eval)
-        bm25_retrieval_results.append(bm25_retrieval_eval)
-        dense_retrieval_results.append(dense_retrieval_eval)
+        for retrieval_method in RETRIEVAL_METHODS:
+            system_result = result[retrieval_method]
+            cited_ids = [source["advisory_id"] for source in system_result["sources"]]
+            retrieved_ids = [item["document_id"] for item in system_result["retrieved_chunks"]]
+            context_advisory_ids = [
+                str(item["record"].get("advisory_id") or item["document_id"])
+                for item in system_result["retrieved_chunks"]
+            ]
+            retrieval_eval = evaluate_retrieval(
+                context_advisory_ids,
+                question_item["ground_truth_chunk_ids"],
+                question_item["question_type"],
+            )
+            answer_eval = metrics.evaluate_answer(
+                system_result["answer"],
+                question_item["ground_truth_answer"],
+                question_item["question_type"],
+                question_item["ground_truth_chunk_ids"],
+                question_item.get("required_answer_terms"),
+                question_item.get("forbidden_answer_terms"),
+                cited_ids=cited_ids,
+                retrieved_document_ids=context_advisory_ids,
+            )
+            answer_results[retrieval_method].append(answer_eval)
+            retrieval_results[retrieval_method].append(retrieval_eval)
+            saved_system_results[retrieval_method] = {
+                "answer": system_result["answer"],
+                "correct": answer_eval["correct"],
+                "citations_accurate": answer_eval["citations_accurate"],
+                "citations_grounded": answer_eval["citations_grounded"],
+                "sources": system_result["sources"],
+                "retrieved_document_ids": retrieved_ids,
+                "retrieval_metrics": retrieval_eval,
+            }
+            status = "✓" if answer_eval["correct"] else "✗"
+            statuses.append(f"{RETRIEVAL_LABELS[retrieval_method]}: {status}")
 
         saved_result = saved_results.get(question_item["question_id"], {})
         saved_result.update(
@@ -255,50 +253,33 @@ def run_full_evaluation(
                 "question_id": question_item["question_id"],
                 "question": question_item["question"],
                 "question_type": question_item["question_type"],
-                "bm25": {
-                    "answer": result["bm25"]["answer"],
-                    "correct": bm25_eval["correct"],
-                    "citations_accurate": bm25_eval["citations_accurate"],
-                    "citations_grounded": bm25_eval["citations_grounded"],
-                    "sources": result["bm25"]["sources"],
-                    "retrieved_document_ids": bm25_retrieved_ids,
-                    "retrieval_metrics": bm25_retrieval_eval,
-                },
-                "dense": {
-                    "answer": result["dense"]["answer"],
-                    "correct": dense_eval["correct"],
-                    "citations_accurate": dense_eval["citations_accurate"],
-                    "citations_grounded": dense_eval["citations_grounded"],
-                    "sources": result["dense"]["sources"],
-                    "retrieved_document_ids": dense_retrieved_ids,
-                    "retrieval_metrics": dense_retrieval_eval,
-                },
+                **saved_system_results,
             }
         )
         saved_results[question_item["question_id"]] = saved_result
 
-        bm25_status = "✓" if bm25_eval["correct"] else "✗"
-        dense_status = "✓" if dense_eval["correct"] else "✗"
-        print(f"  BM25: {bm25_status} | Dense: {dense_status}")
+        print("  " + " | ".join(statuses))
 
     ordered_results = [saved_results[item["question_id"]] for item in evaluation_set]
-    bm25_stats = metrics.aggregate_results(bm25_results)
-    dense_stats = metrics.aggregate_results(dense_results)
-    bm25_stats["retrieval"] = aggregate_retrieval_results(
-        bm25_retrieval_results,
-        top_k=config.retrieval.top_k,
-    )
-    dense_stats["retrieval"] = aggregate_retrieval_results(
-        dense_retrieval_results,
-        top_k=config.retrieval.top_k,
-    )
+    system_stats = {}
+    for retrieval_method in RETRIEVAL_METHODS:
+        stats = metrics.aggregate_results(answer_results[retrieval_method])
+        stats["retrieval"] = aggregate_retrieval_results(
+            retrieval_results[retrieval_method],
+            top_k=config.retrieval.top_k,
+        )
+        system_stats[retrieval_method] = stats
+
+    bm25_accuracy = system_stats["bm25"]["accuracy"]
+    dense_accuracy = system_stats["dense"]["accuracy"]
+    hybrid_accuracy = system_stats["hybrid"]["accuracy"]
     report_metrics = {
         **existing_report["metrics"],
-        "bm25": bm25_stats,
-        "dense": dense_stats,
+        **system_stats,
         "comparison": {
-            "dense_minus_bm25_accuracy_points": (dense_stats["accuracy"] - bm25_stats["accuracy"])
-            * 100,
+            "dense_minus_bm25_accuracy_points": (dense_accuracy - bm25_accuracy) * 100,
+            "hybrid_minus_bm25_accuracy_points": (hybrid_accuracy - bm25_accuracy) * 100,
+            "hybrid_minus_dense_accuracy_points": (hybrid_accuracy - dense_accuracy) * 100,
         },
     }
     report = build_evaluation_report(
@@ -309,14 +290,18 @@ def run_full_evaluation(
     )
     save_evaluation_report(results_file, report)
 
-    print_evaluation_summary("BM25 Results", bm25_stats)
-    print_evaluation_summary("Dense Retrieval Results", dense_stats)
+    for retrieval_method in RETRIEVAL_METHODS:
+        print_evaluation_summary(
+            f"{RETRIEVAL_LABELS[retrieval_method]} Results",
+            system_stats[retrieval_method],
+        )
 
-    difference = (dense_stats["accuracy"] - bm25_stats["accuracy"]) * 100
     print("\nComparison:")
-    print(f"  Dense vs BM25: {difference:+.1f}% accuracy")
+    print(f"  Dense vs BM25: {(dense_accuracy - bm25_accuracy) * 100:+.1f}% accuracy")
+    print(f"  Hybrid vs BM25: {(hybrid_accuracy - bm25_accuracy) * 100:+.1f}% accuracy")
+    print(f"  Hybrid vs Dense: {(hybrid_accuracy - dense_accuracy) * 100:+.1f}% accuracy")
     print(f"  Results saved to: {results_file}")
-    return bm25_results, dense_results
+    return tuple(answer_results[method] for method in RETRIEVAL_METHODS)
 
 
 def interactive_demo(bm25, dense, llm):
@@ -378,13 +363,13 @@ def build_parser():
         )
 
     ask_parser = subparsers.add_parser(
-        "ask", help="Ask one question using BM25 and dense retrieval."
+        "ask", help="Ask one question using BM25, dense, and hybrid retrieval."
     )
     ask_parser.add_argument("question", help="Security advisory question")
     add_runtime_arguments(ask_parser)
 
     evaluate_parser = subparsers.add_parser(
-        "evaluate", help="Run the complete BM25 and dense evaluation."
+        "evaluate", help="Run the complete BM25, dense, and hybrid evaluation."
     )
     add_runtime_arguments(evaluate_parser)
     evaluate_parser.add_argument(

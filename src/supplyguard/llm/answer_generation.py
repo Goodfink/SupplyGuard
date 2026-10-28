@@ -6,6 +6,8 @@ from supplyguard.llm.prompt_template import create_rag_prompt
 from supplyguard.retrieval.hybrid import reciprocal_rank_fusion
 from supplyguard.sources import build_advisory_sources, is_abstention, remove_inline_citations
 
+RETRIEVAL_METHODS = ("bm25", "dense", "hybrid")
+
 
 class RAGPipeline:
     def __init__(
@@ -154,3 +156,18 @@ def generate_with_both_retrievers(question, bm25_retriever, dense_retriever, llm
     dense_result = pipeline.generate_answer(question, use_dense=True)
 
     return {"question": question, "bm25": bm25_result, "dense": dense_result}
+
+
+def generate_with_all_retrievers(question, bm25_retriever, dense_retriever, llm):
+    """Generate comparable answers with every supported retrieval method."""
+    pipeline = RAGPipeline(bm25_retriever, dense_retriever, llm)
+    return {
+        "question": question,
+        **{
+            retrieval_method: pipeline.generate_answer(
+                question,
+                retrieval_method=retrieval_method,
+            )
+            for retrieval_method in RETRIEVAL_METHODS
+        },
+    }

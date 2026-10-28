@@ -82,7 +82,7 @@ mypy
 
 ## Reproduce Results
 
-Run all no-retrieval, BM25, and dense experiments with one command:
+Run all no-retrieval, BM25, dense, and hybrid experiments with one command:
 
 ```bash
 supplyguard-experiments
@@ -120,6 +120,9 @@ supplyguard demo
 ```
 
 ## Results
+
+The table below records the original BM25 and dense reference run. Current experiment reports also
+include hybrid answer quality, citation quality, and retrieval metrics under the same configuration.
 
 | Condition | Shared factoids | Full evaluation | Unanswerable |
 |---|---:|---:|---:|
