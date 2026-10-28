@@ -1,8 +1,11 @@
+import json
+
 import pytest
 
 from supplyguard.config import DEFAULT_CONFIG, RetrievalConfig, SupplyGuardConfig
 from supplyguard.errors import ConfigurationError, ModelGenerationError
 from supplyguard.llm.answer_generation import RAGPipeline, generate_with_all_retrievers
+from supplyguard.llm.prompt_template import RAG_PAYLOAD_INTRO, RAG_SYSTEM_PROMPT
 
 
 class FakeRetriever:
@@ -60,8 +63,12 @@ def test_generate_answer_uses_filtered_bm25_context(advisory_record_factory):
             "score": 20.0,
         }
     ]
-    assert record["retrieval_text"] in llm.calls[0][0]
-    assert llm.calls[0][1] == {"max_tokens": DEFAULT_CONFIG.models.answer_max_tokens}
+    prompt_payload = json.loads(llm.calls[0][0].removeprefix(RAG_PAYLOAD_INTRO))
+    assert prompt_payload["advisories"][0]["content"] == record["retrieval_text"]
+    assert llm.calls[0][1] == {
+        "max_tokens": DEFAULT_CONFIG.models.answer_max_tokens,
+        "system_prompt": RAG_SYSTEM_PROMPT,
+    }
     assert bm25.queries == [("What affects example-package?", 5)]
 
 

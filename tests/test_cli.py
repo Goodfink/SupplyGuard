@@ -253,6 +253,16 @@ def test_main_reports_typed_errors_with_stable_exit_code(monkeypatch, capsys):
     assert capsys.readouterr().err == "SupplyGuard error: model cache is unavailable\n"
 
 
+def test_invalid_question_fails_before_models_are_loaded(monkeypatch, capsys):
+    setup_calls = []
+    monkeypatch.setattr(cli, "setup_system", lambda *_args, **_kwargs: setup_calls.append(True))
+    oversized_question = "x" * (DEFAULT_CONFIG.models.question_max_chars + 1)
+
+    assert main(["ask", oversized_question]) == 2
+    assert setup_calls == []
+    assert "Question exceeds the maximum length" in capsys.readouterr().err
+
+
 def test_missing_corpus_fails_before_model_imports(tmp_path, capsys):
     missing_path = tmp_path / "missing.jsonl"
 

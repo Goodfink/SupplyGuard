@@ -3,6 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from supplyguard.config import DEFAULT_CONFIG, ModelConfig
 from supplyguard.errors import ConfigurationError, ModelGenerationError, ModelLoadError
+from supplyguard.llm.prompt_template import build_chat_messages
 
 
 class HuggingFaceLLM:
@@ -18,6 +19,7 @@ class HuggingFaceLLM:
                 revision=config.language_model_revision,
             )
             self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.truncation_side = "right"
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 config.language_model_name,
@@ -33,7 +35,13 @@ class HuggingFaceLLM:
                 f"Underlying error: {error}"
             ) from error
 
-    def generate(self, prompt: str, max_tokens: int | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int | None = None,
+        *,
+        system_prompt: str | None = None,
+    ) -> str:
         """Generate a deterministic response or raise an actionable model error."""
         if max_tokens is None:
             max_tokens = self.config.answer_max_tokens
@@ -41,7 +49,7 @@ class HuggingFaceLLM:
             raise ConfigurationError("max_tokens must be greater than 0")
 
         try:
-            messages = [{"role": "user", "content": prompt}]
+            messages = build_chat_messages(prompt, system_prompt=system_prompt)
             formatted_prompt = self.tokenizer.apply_chat_template(
                 messages, tokenize=False, add_generation_prompt=True
             )
