@@ -1,0 +1,12 @@
+*
+
+!pyproject.toml
+!README.md
+!src/
+!src/**
+!data/
+!data/processed/
+!data/processed/advisories.jsonl
+
+**/__pycache__/
+*.py[cod]
