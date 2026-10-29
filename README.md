@@ -132,6 +132,27 @@ Run the interactive dense-retrieval demo:
 supplyguard demo
 ```
 
+### Local API
+
+Start the HTTP API with the same corpus, model, device, and index options as the CLI:
+
+```bash
+supplyguard serve --host 127.0.0.1 --port 8000
+```
+
+Models and retrieval indexes are initialized once during service startup. Ask a question with BM25,
+dense, or hybrid retrieval (the default):
+
+```bash
+curl --request POST http://127.0.0.1:8000/v1/ask \
+  --header "Content-Type: application/json" \
+  --data '{"question":"Which version fixes this vulnerability?","retrieval_method":"hybrid"}'
+```
+
+Operational probes are available at `/healthz` and `/readyz`. Interactive OpenAPI documentation is
+available at `http://127.0.0.1:8000/docs`. The server binds to localhost by default; use
+`--host 0.0.0.0` only when network access is intentional and protected by an appropriate gateway.
+
 ## Results
 
 The table below records the original BM25 and dense reference run. Current experiment reports also

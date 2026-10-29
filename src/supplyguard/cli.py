@@ -100,10 +100,6 @@ def setup_system(
     rebuild_index: bool = False,
 ):
     """Initialize retrieval and LLM systems."""
-    from supplyguard.retrieval.bm25 import BM25Retriever, load_corpus
-
-    records = load_corpus(corpus_path)
-
     print("\nModel configuration:")
     print(
         f"  Language: {config.models.language_model_name} "
@@ -115,27 +111,15 @@ def setup_system(
     )
     print(f"  Device: {config.models.device}")
 
-    print("\n1. Setting up BM25 retriever...")
-    bm25 = BM25Retriever()
-    bm25.build_index(records)
+    from supplyguard.runtime import load_runtime
 
-    print("\n2. Setting up dense retriever...")
-    from supplyguard.retrieval.dense_retrieval import DenseRetriever
-
-    dense = DenseRetriever(config.models)
-    dense.prepare_index(
-        records,
-        corpus_path=corpus_path,
-        cache_dir=config.paths.dense_index_dir,
-        force_rebuild=rebuild_index,
+    runtime = load_runtime(
+        corpus_path,
+        config=config,
+        rebuild_index=rebuild_index,
+        report_progress=lambda message: print(f"\n{message}"),
     )
-
-    print("\n3. Loading LLM (this takes 2-3 minutes on first run)...")
-    from supplyguard.llm.llm_setup import HuggingFaceLLM
-
-    llm = HuggingFaceLLM(config.models)
-
-    return bm25, dense, llm, records
+    return runtime.bm25, runtime.dense, runtime.llm, runtime.records
 
 
 def run_single_query(question, bm25, dense, llm):
@@ -383,6 +367,22 @@ def build_parser():
     demo_parser = subparsers.add_parser("demo", help="Start the interactive dense-retrieval demo.")
     add_runtime_arguments(demo_parser)
 
+    serve_parser = subparsers.add_parser("serve", help="Start the local SupplyGuard HTTP API.")
+    add_runtime_arguments(serve_parser)
+    serve_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Interface to bind (defaults to local-only access)",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        choices=range(1, 65_536),
+        metavar="PORT",
+        help="TCP port from 1 to 65535 (default: 8000)",
+    )
+
     subparsers.add_parser("inspect-corpus", help="Inspect the configured raw OSV archives.")
     return parser
 
@@ -409,6 +409,17 @@ def main(argv=None):
             embedding_model_revision=args.embedding_model_revision,
             device=args.device,
         )
+        if args.command == "serve":
+            from supplyguard.api import run_api_server
+
+            run_api_server(
+                host=args.host,
+                port=args.port,
+                corpus_path=args.corpus,
+                config=config,
+                rebuild_index=args.rebuild_index,
+            )
+            return 0
         if args.command == "ask":
             args.question = validate_question(
                 args.question,

@@ -14,6 +14,7 @@ from supplyguard.errors import CorpusError, ModelLoadError
         (["ask", "What affects example-package?"], "ask"),
         (["evaluate"], "evaluate"),
         (["demo"], "demo"),
+        (["serve"], "serve"),
         (["inspect-corpus"], "inspect-corpus"),
     ],
 )
@@ -27,7 +28,7 @@ def test_ask_accepts_custom_corpus_path():
     assert args.corpus == Path("custom.jsonl")
 
 
-@pytest.mark.parametrize("command", ["ask", "evaluate", "demo"])
+@pytest.mark.parametrize("command", ["ask", "evaluate", "demo", "serve"])
 def test_model_commands_accept_forced_index_rebuild(command):
     arguments = [command]
     if command == "ask":
@@ -68,9 +69,16 @@ def test_ask_uses_repository_corpus_by_default():
     assert args.corpus == DEFAULT_CONFIG.paths.corpus_path
 
 
+def test_serve_defaults_to_local_only_access():
+    args = build_parser().parse_args(["serve"])
+
+    assert args.host == "127.0.0.1"
+    assert args.port == 8000
+
+
 def test_main_without_command_prints_help_without_loading_models(capsys):
     assert main([]) == 0
-    assert "{ask,evaluate,demo,inspect-corpus}" in capsys.readouterr().out
+    assert "{ask,evaluate,demo,serve,inspect-corpus}" in capsys.readouterr().out
 
 
 def test_main_routes_ask_command(monkeypatch):
@@ -144,6 +152,37 @@ def test_main_forwards_custom_model_configuration(monkeypatch):
     assert configured.models.embedding_model_revision == "main"
     assert configured.models.device == "mps"
     assert rebuild_index is False
+
+
+def test_main_routes_serve_without_eagerly_loading_models(monkeypatch):
+    from supplyguard import api
+
+    setup_calls = []
+    server_calls = []
+    monkeypatch.setattr(cli, "setup_system", lambda *_args, **_kwargs: setup_calls.append(True))
+    monkeypatch.setattr(api, "run_api_server", lambda **settings: server_calls.append(settings))
+
+    assert (
+        main(
+            [
+                "serve",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8080",
+                "--language-model",
+                "organization/chat-model",
+            ]
+        )
+        == 0
+    )
+    assert setup_calls == []
+    assert len(server_calls) == 1
+    assert server_calls[0]["host"] == "0.0.0.0"
+    assert server_calls[0]["port"] == 8080
+    assert server_calls[0]["corpus_path"] == DEFAULT_CONFIG.paths.corpus_path
+    assert server_calls[0]["config"].models.language_model_name == "organization/chat-model"
+    assert server_calls[0]["rebuild_index"] is False
 
 
 def test_evaluate_forwards_custom_models_to_report(monkeypatch, tmp_path):
