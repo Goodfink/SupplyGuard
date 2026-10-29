@@ -93,6 +93,16 @@ ruff check src tests
 mypy
 ```
 
+Audit the fully resolved Python dependency graph against the PyPA advisory database:
+
+```bash
+pip install -e ".[security]"
+python -m pip_audit . --progress-spinner off
+```
+
+GitHub Actions also runs this audit, CodeQL's extended Python security queries, and pull-request
+dependency review. Dependabot checks Python, Docker, and GitHub Actions dependencies weekly.
+
 ## Reproduce Results
 
 Run all no-retrieval, BM25, dense, and hybrid experiments with one command:
