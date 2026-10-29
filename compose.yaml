@@ -1,0 +1,27 @@
+name: supplyguard
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: supplyguard:local
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${SUPPLYGUARD_PORT:-8000}:8000"
+    volumes:
+      - model-cache:/home/supplyguard/.cache
+      - index-cache:/app/data/indexes
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  model-cache:
+  index-cache:

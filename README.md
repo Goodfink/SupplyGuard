@@ -153,6 +153,40 @@ Operational probes are available at `/healthz` and `/readyz`. Interactive OpenAP
 available at `http://127.0.0.1:8000/docs`. The server binds to localhost by default; use
 `--host 0.0.0.0` only when network access is intentional and protected by an appropriate gateway.
 
+### Container deployment
+
+Build and start the API with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+The first startup downloads the pinned language and embedding models and builds the dense index, so
+readiness can take several minutes. Named volumes retain both caches across container replacements.
+Once startup completes, open `http://127.0.0.1:8000/docs` or call the API normally. Set a different
+host port without changing the container image:
+
+```bash
+SUPPLYGUARD_PORT=8080 docker compose up --build
+```
+
+The production image uses a digest-pinned Python base, installs the project in an isolated virtual
+environment, and runs as a non-root user. Compose binds the service to localhost, drops all Linux
+capabilities, prevents privilege escalation, and makes the container filesystem read-only except
+for the model cache, index cache, and temporary filesystem.
+
+Stop the service without deleting its caches:
+
+```bash
+docker compose down
+```
+
+Delete the downloaded models and generated index as well:
+
+```bash
+docker compose down --volumes
+```
+
 ## Results
 
 The table below records the original BM25 and dense reference run. Current experiment reports also

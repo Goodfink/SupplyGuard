@@ -41,3 +41,8 @@ jobs:
 
       - name: Test
         run: python -m pytest
+
+      - name: Validate container definitions
+        run: |
+          docker compose config --quiet
+          docker build --check .
