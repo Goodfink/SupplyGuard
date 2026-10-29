@@ -71,8 +71,13 @@ class HuggingFaceLLM:
 
             input_length = inputs["input_ids"].shape[1]
             generated_tokens = outputs[0][input_length:]
-            response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            response = response.strip()
+            decoded_response = self.tokenizer.decode(
+                generated_tokens,
+                skip_special_tokens=True,
+            )
+            if not isinstance(decoded_response, str):
+                raise ModelGenerationError("The tokenizer returned a batched response")
+            response = decoded_response.strip()
             if not response:
                 raise ModelGenerationError("The language model returned an empty response")
             return response
